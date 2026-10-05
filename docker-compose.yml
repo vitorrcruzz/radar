@@ -1,0 +1,159 @@
+services:
+
+  sim-switch:
+    image: tandrup/snmpsim
+    container_name: sim-switch-cisco
+    volumes:
+      - ./snmp-data/switch.snmprec:/usr/local/snmpsim/data/public.snmprec
+    networks:
+      lab-network:
+        ipv4_address: 172.20.0.10
+
+  sim-roteador:
+    image: tandrup/snmpsim
+    container_name: sim-roteador-mikrotik
+    volumes:
+      - ./snmp-data/router.snmprec:/usr/local/snmpsim/data/public.snmprec
+    networks:
+      lab-network:
+        ipv4_address: 172.20.0.11
+
+  sim-pc-1:
+    image: tandrup/snmpsim
+    container_name: sim-pc-windows-1
+    volumes:
+      - ./snmp-data/pc1.snmprec:/usr/local/snmpsim/data/public.snmprec
+    networks:
+      lab-network:
+        ipv4_address: 172.20.0.12
+
+  sim-pc-2:
+    image: tandrup/snmpsim
+    container_name: sim-pc-windows-2
+    volumes:
+      - ./snmp-data/pc2.snmprec:/usr/local/snmpsim/data/public.snmprec
+    networks:
+      lab-network:
+        ipv4_address: 172.20.0.13
+
+  sim-printer:
+    image: tandrup/snmpsim
+    container_name: sim-impressora-hp
+    volumes:
+      - ./snmp-data/printer.snmprec:/usr/local/snmpsim/data/public.snmprec
+    networks:
+      lab-network:
+        ipv4_address: 172.20.0.14
+
+  sim-ap:
+    image: tandrup/snmpsim
+    container_name: sim-ap-wifi
+    volumes:
+      - ./snmp-data/ap.snmprec:/usr/local/snmpsim/data/public.snmprec
+    networks:
+      lab-network:
+        ipv4_address: 172.20.0.15
+  sim-camera:
+    image: tandrup/snmpsim
+    container_name: sim-camera-ip
+    volumes:
+      - ./snmp-data/camera.snmprec:/usr/local/snmpsim/data/public.snmprec
+    networks:
+      lab-network:
+        ipv4_address: 172.20.0.16
+
+  sim-nobreak:
+    image: tandrup/snmpsim
+    container_name: sim-nobreak-apc
+    volumes:
+      - ./snmp-data/nobreak.snmprec:/usr/local/snmpsim/data/public.snmprec
+    networks:
+      lab-network:
+        ipv4_address: 172.20.0.17
+
+  # ── Dispositivos offline (perfil desativado) ──────────────────────────────
+  sim-notebook-1:
+    image: tandrup/snmpsim
+    container_name: sim-notebook-1
+    profiles: ["offline"]
+    volumes:
+      - ./snmp-data/notebook.snmprec:/usr/local/snmpsim/data/public.snmprec
+    networks:
+      lab-network:
+        ipv4_address: 172.20.0.20
+
+  sim-notebook-2:
+    image: tandrup/snmpsim
+    container_name: sim-notebook-2
+    profiles: ["offline"]
+    volumes:
+      - ./snmp-data/notebook2.snmprec:/usr/local/snmpsim/data/public.snmprec
+    networks:
+      lab-network:
+        ipv4_address: 172.20.0.21
+
+  sim-pc-3:
+    image: tandrup/snmpsim
+    container_name: sim-pc-3
+    profiles: ["offline"]
+    volumes:
+      - ./snmp-data/pc3.snmprec:/usr/local/snmpsim/data/public.snmprec
+    networks:
+      lab-network:
+        ipv4_address: 172.20.0.22
+
+  sim-impressora-2:
+    image: tandrup/snmpsim
+    container_name: sim-impressora-2
+    profiles: ["offline"]
+    volumes:
+      - ./snmp-data/printer2.snmprec:/usr/local/snmpsim/data/public.snmprec
+    networks:
+      lab-network:
+        ipv4_address: 172.20.0.23
+  sim-firewall:
+    image: tandrup/snmpsim
+    container_name: sim-firewall
+    profiles: ["offline"]
+    volumes:
+      - ./snmp-data/notebook.snmprec:/usr/local/snmpsim/data/public.snmprec
+    networks:
+      lab-network:
+        ipv4_address: 172.20.0.24
+
+  # ── Aplicação principal ───────────────────────────────────────────────────
+  inventario-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: inventario-ti-app
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./database:/app/database
+      - ./exports:/app/exports
+    environment:
+      - FLASK_ENV=development
+      - SCAN_NETWORK=172.20.0.0/24
+      - SCAN_COMMUNITY=public
+      - SCAN_INTERVAL=300
+      - TZ=America/Sao_Paulo
+    networks:
+      lab-network:
+        ipv4_address: 172.20.0.2
+    depends_on:
+      - sim-switch
+      - sim-roteador
+      - sim-pc-1
+      - sim-pc-2
+      - sim-printer
+      - sim-ap
+      - sim-camera
+      - sim-nobreak
+
+networks:
+  lab-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24

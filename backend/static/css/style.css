@@ -1,0 +1,504 @@
+/* ── Variáveis de tema ───────────────────────────────── */
+:root {
+  --azul-fatec:    #1F4E79;
+  --azul-claro:    #2E75B6;
+  --cinza-bg:      #F4F6F9;
+  --sidebar-bg:    #1F4E79;
+  --sidebar-text:  rgba(255,255,255,.75);
+  --card-bg:       #ffffff;
+  --card-border:   #e9ecef;
+  --text-primary:  #212529;
+  --text-muted:    #6c757d;
+  --table-hover:   #f0f4ff;
+  --input-bg:      #ffffff;
+  --input-border:  #ced4da;
+  --input-text:    #212529;
+  --info-card-bg:  #f8f9fa;
+  --info-card-border: #e9ecef;
+  --modal-bg:      #ffffff;
+  --chart-online:  #28a74599;
+  --chart-offline: #dc354599;
+}
+
+[data-theme="nordic"] {
+  --azul-fatec:    #1a1f2e;
+  --azul-claro:    #4fc3f7;
+  --cinza-bg:      #0d1117;
+  --sidebar-bg:    #161b27;
+  --sidebar-text:  rgba(255,255,255,.7);
+  --card-bg:       #1c2333;
+  --card-border:   #2d3748;
+  --text-primary:  #e2e8f0;
+  --text-muted:    #8892a4;
+  --table-hover:   #243044;
+  --input-bg:      #243044;
+  --input-border:  #2d3748;
+  --input-text:    #e2e8f0;
+  --info-card-bg:  #1a2235;
+  --info-card-border: #2d3748;
+  --modal-bg:      #1c2333;
+  --chart-online:  #4fc3f799;
+  --chart-offline: #f4736899;
+}
+
+/* ── Base ────────────────────────────────────────────── */
+body {
+  background: var(--cinza-bg);
+  font-family: 'Segoe UI', sans-serif;
+  color: var(--text-primary);
+  transition: background .3s, color .3s;
+}
+
+/* ── Sidebar ─────────────────────────────────────────── */
+#sidebar {
+  width: 240px;
+  min-height: 100vh;
+  background: var(--sidebar-bg);
+  position: fixed;
+  top: 0; left: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  transition: background .3s;
+}
+
+#sidebar .logo {
+  padding: 1.5rem 1rem 1rem;
+  border-bottom: 1px solid rgba(255,255,255,.1);
+}
+
+#sidebar .logo h5 {
+  color: #fff;
+  font-size: .9rem;
+  margin: 0;
+}
+
+#sidebar .logo small {
+  color: rgba(255,255,255,.5);
+  font-size: .75rem;
+}
+
+#sidebar .nav-link {
+  color: var(--sidebar-text);
+  padding: .65rem 1.25rem;
+  border-radius: .4rem;
+  margin: .1rem .5rem;
+  font-size: .875rem;
+  transition: background .15s;
+}
+
+#sidebar .nav-link:hover,
+#sidebar .nav-link.active {
+  background: rgba(255,255,255,.1);
+  color: #fff;
+}
+
+#sidebar .nav-link i { margin-right: .6rem; font-size: 1rem; }
+
+#sidebar .badge-count {
+  background: rgba(255,255,255,.2);
+  color: #fff;
+  font-size: .7rem;
+  border-radius: 10px;
+  padding: .1rem .45rem;
+}
+
+#sidebar .rodape-sidebar { margin-top: auto; padding: 1rem; }
+
+/* ── Botão de tema ───────────────────────────────────── */
+#btn-tema {
+  background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.2);
+  color: #fff;
+  border-radius: .4rem;
+  padding: .4rem .8rem;
+  font-size: .8rem;
+  cursor: pointer;
+  transition: background .15s;
+  width: calc(100% - 1rem);
+  margin: 0 .5rem .5rem;
+  text-align: left;
+}
+/* ── Botões de tema (sol/lua) ────────────────────────── */
+.btn-toggle-tema {
+  background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.2);
+  color: rgba(255,255,255,.7);
+  border-radius: .4rem;
+  padding: .4rem .7rem;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+  flex: 1;
+  text-align: center;
+}
+
+.btn-toggle-tema:hover {
+  background: rgba(255,255,255,.2);
+  color: #fff;
+}
+
+.btn-toggle-tema.ativo {
+  background: rgba(255,255,255,.25);
+  color: #fff;
+  border-color: rgba(255,255,255,.5);
+}
+
+#btn-tema:hover { background: rgba(255,255,255,.18); }
+
+/* ── Main ────────────────────────────────────────────── */
+#main { margin-left: 240px; padding: 2rem; }
+
+/* ── Topbar ──────────────────────────────────────────── */
+.topbar {
+  background: var(--card-bg);
+  border-radius: .6rem;
+  padding: .9rem 1.25rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: background .3s;
+}
+
+.topbar h4 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--azul-claro);
+  font-weight: 600;
+}
+
+/* ── Cards de estatística ────────────────────────────── */
+.stat-card {
+  background: var(--card-bg);
+  border-radius: .7rem;
+  padding: 1.2rem 1.4rem;
+  box-shadow: 0 1px 4px rgba(0,0,0,.1);
+  border-left: 4px solid;
+  transition: transform .15s, background .3s;
+}
+
+.stat-card:hover { transform: translateY(-2px); }
+.stat-card.total   { border-color: var(--azul-claro); }
+.stat-card.online  { border-color: #28a745; }
+.stat-card.offline { border-color: #dc3545; }
+.stat-card.scan    { border-color: #fd7e14; }
+
+.stat-card .numero {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.stat-card .label {
+  font-size: .8rem;
+  color: var(--text-muted);
+  margin-top: .3rem;
+}
+
+.stat-card .icone { font-size: 1.8rem; opacity: .2; }
+
+/* ── Badges de status ────────────────────────────────── */
+.badge-online  { background: #d4edda; color: #155724; }
+.badge-offline { background: #f8d7da; color: #721c24; }
+
+[data-theme="nordic"] .badge-online  { background: #1a3a2a; color: #4ade80; }
+[data-theme="nordic"] .badge-offline { background: #3a1a1a; color: #f87171; }
+
+/* ── Cards de tabela ─────────────────────────────────── */
+.table-card {
+  background: var(--card-bg);
+  border-radius: .7rem;
+  box-shadow: 0 1px 4px rgba(0,0,0,.1);
+  overflow: hidden;
+  transition: background .3s;
+}
+
+.table-card .card-header {
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--card-border);
+  padding: 1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: background .3s, border-color .3s;
+}
+
+.table-card .card-header h5 {
+  margin: 0;
+  font-size: .95rem;
+  color: var(--text-primary);
+}
+
+/* ── Tabela ──────────────────────────────────────────── */
+table.dataTable tbody tr { background: var(--card-bg) !important; color: var(--text-primary); }
+table.dataTable tbody tr:hover { background: var(--table-hover) !important; }
+table.dataTable thead th { color: var(--text-primary); border-color: var(--card-border) !important; }
+table.dataTable td, table.dataTable th { border-color: var(--card-border) !important; }
+
+/* DataTables controles */
+[data-theme="nordic"] .dataTables_wrapper .dataTables_length,
+[data-theme="nordic"] .dataTables_wrapper .dataTables_filter,
+[data-theme="nordic"] .dataTables_wrapper .dataTables_info,
+[data-theme="nordic"] .dataTables_wrapper .dataTables_paginate {
+  color: var(--text-muted) !important;
+}
+
+[data-theme="nordic"] .dataTables_wrapper .dataTables_paginate .paginate_button {
+  color: var(--text-muted) !important;
+}
+
+[data-theme="nordic"] .dataTables_wrapper .dataTables_paginate .paginate_button.current {
+  background: var(--azul-claro) !important;
+  color: #fff !important;
+  border-color: var(--azul-claro) !important;
+}
+
+[data-theme="nordic"] .dataTables_wrapper select,
+[data-theme="nordic"] .dataTables_wrapper input {
+  background: var(--input-bg) !important;
+  color: var(--input-text) !important;
+  border-color: var(--input-border) !important;
+}
+
+/* ── Select / Input ──────────────────────────────────── */
+.form-select, .form-control {
+  background-color: var(--input-bg);
+  color: var(--input-text);
+  border-color: var(--input-border);
+}
+
+.form-select:focus, .form-control:focus {
+  background-color: var(--input-bg);
+  color: var(--input-text);
+}
+
+/* ── Botão de scan ───────────────────────────────────── */
+#btn-scan {
+  background: var(--azul-claro);
+  border: none;
+  color: #fff;
+}
+
+#btn-scan:hover { filter: brightness(1.1); }
+#btn-scan.scanning { opacity: .7; pointer-events: none; }
+#scan-spinner { display: none; }
+#scan-spinner.visible { display: inline-block; }
+
+/* ── Modal ───────────────────────────────────────────── */
+.modal-content {
+  background: var(--modal-bg);
+  color: var(--text-primary);
+  border-color: var(--card-border);
+}
+
+.modal-body { background: var(--modal-bg); }
+.modal-footer { background: var(--modal-bg); border-color: var(--card-border); }
+
+/* ── Cards de info no modal ──────────────────────────── */
+.info-card {
+  background: var(--info-card-bg);
+  border-radius: .6rem;
+  padding: 1rem;
+  height: 100%;
+  border: 1px solid var(--info-card-border);
+  transition: background .3s, border-color .3s;
+}
+
+.info-label {
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--azul-claro);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin-bottom: .6rem;
+}
+
+.info-card .table td {
+  padding: .25rem .3rem;
+  font-size: .85rem;
+  color: var(--text-primary);
+  background: transparent !important;
+}
+
+/* ── Toast ───────────────────────────────────────────── */
+.toast-container {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 9999;
+}
+
+/* ── Tema escuro: efeito estrela no fundo ─────────────────── */
+[data-theme="nordic"] body::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: radial-gradient(ellipse at 80% 80%, rgba(79,195,247,.04) 0%, transparent 60%),
+              radial-gradient(ellipse at 20% 20%, rgba(99,102,241,.04) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Tema escuro: sidebar gradiente ───────────────────────── */
+[data-theme="nordic"] #sidebar {
+  background: linear-gradient(180deg, #1a1f2e 0%, #161b27 100%);
+  border-right: 1px solid #2d3748;
+}
+
+/* ── Tema escuro: histórico e dispositivos ──────────────────────────── */
+[data-theme="nordic"] .stat-card { box-shadow: 0 1px 8px rgba(0,0,0,.3); }
+[data-theme="nordic"] .table-card { box-shadow: 0 1px 8px rgba(0,0,0,.3); }
+
+/* Fundo das tabelas DataTables no tema nordic */
+[data-theme="nordic"] .dataTables_wrapper,
+[data-theme="nordic"] div.dataTables_scrollBody,
+[data-theme="nordic"] div.dataTables_scrollHead,
+[data-theme="nordic"] .dataTables_scroll {
+  background: var(--card-bg) !important;
+}
+
+[data-theme="nordic"] table.dataTable {
+  background: var(--card-bg) !important;
+}
+
+[data-theme="nordic"] table.dataTable tbody td,
+[data-theme="nordic"] table.dataTable thead th {
+  background: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+[data-theme="nordic"] table.dataTable tbody tr:hover td {
+  background: var(--table-hover) !important;
+}
+/* ── Tema escuro: controles DataTables ────────────────────── */
+[data-theme="nordic"] .dataTables_wrapper .dataTables_length select {
+  background-color: var(--input-bg) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--input-border) !important;
+  border-radius: .4rem;
+  padding: .2rem .5rem;
+  cursor: pointer;
+}
+
+[data-theme="nordic"] .dataTables_wrapper .dataTables_length select:hover {
+  border-color: var(--azul-claro) !important;
+}
+
+[data-theme="nordic"] .dataTables_wrapper .dataTables_length label,
+[data-theme="nordic"] .dataTables_wrapper .dataTables_filter label,
+[data-theme="nordic"] .dataTables_wrapper .dataTables_info {
+  color: var(--text-muted) !important;
+}
+
+[data-theme="nordic"] .dataTables_wrapper .dataTables_filter input {
+  background-color: var(--input-bg) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--input-border) !important;
+  border-radius: .4rem;
+  padding: .2rem .5rem;
+}
+
+[data-theme="nordic"] .dataTables_wrapper .dataTables_filter input::placeholder {
+  color: var(--text-muted) !important;
+}
+
+/* ── Tema escuro: botões Anterior / Próximo ───────────────── */
+[data-theme="nordic"] .dataTables_wrapper .dataTables_paginate .paginate_button {
+  background: var(--input-bg) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--input-border) !important;
+  border-radius: .4rem !important;
+  margin: 0 2px !important;
+  transition: background .15s !important;
+}
+
+[data-theme="nordic"] .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+  background: var(--table-hover) !important;
+  color: var(--azul-claro) !important;
+  border-color: var(--azul-claro) !important;
+}
+
+[data-theme="nordic"] .dataTables_wrapper .dataTables_paginate .paginate_button.current,
+[data-theme="nordic"] .dataTables_wrapper .dataTables_paginate .paginate_button.current:hover {
+  background: var(--azul-claro) !important;
+  color: #fff !important;
+  border-color: var(--azul-claro) !important;
+}
+
+[data-theme="nordic"] .dataTables_wrapper .dataTables_paginate .paginate_button.disabled,
+[data-theme="nordic"] .dataTables_wrapper .dataTables_paginate .paginate_button.disabled:hover {
+  background: var(--card-bg) !important;
+  color: var(--text-muted) !important;
+  border-color: var(--input-border) !important;
+  cursor: not-allowed !important;
+}
+
+/* ── Cursor pointer na lista suspensa (todos os temas) ── */
+.dataTables_wrapper .dataTables_length select {
+  cursor: pointer;
+}
+/* ── Nordic: seta dos selects Bootstrap ──────────────── */
+[data-theme="nordic"] .form-select,
+[data-theme="nordic"] #filtro-tipo,
+[data-theme="nordic"] #filtro-status {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%238892a4' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e") !important;
+  background-color: var(--input-bg) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--input-border) !important;
+}
+/* ── Nordic: modal força total ───────────────────────── */
+[data-theme="nordic"] #modalDetalhes .modal-content,
+[data-theme="nordic"] #modalDetalhes .modal-body,
+[data-theme="nordic"] #modalDetalhes .modal-footer {
+  background-color: #1c2333 !important;
+  color: #e2e8f0 !important;
+}
+
+[data-theme="nordic"] #modalDetalhes .info-card {
+  background-color: #1a2235 !important;
+  border-color: #2d3748 !important;
+}
+
+[data-theme="nordic"] #modalDetalhes .info-label {
+  color: #4fc3f7 !important;
+}
+
+[data-theme="nordic"] #modalDetalhes table td,
+[data-theme="nordic"] #modalDetalhes table th,
+[data-theme="nordic"] #modalDetalhes table tr {
+  background-color: transparent !important;
+  color: #e2e8f0 !important;
+  border-color: #2d3748 !important;
+}
+
+[data-theme="nordic"] #modalDetalhes .text-muted {
+  color: #8892a4 !important;
+}
+
+[data-theme="nordic"] #modalDetalhes strong {
+  color: #e2e8f0 !important;
+}
+
+[data-theme="nordic"] #modalDetalhes small {
+  color: #8892a4 !important;
+}
+
+[data-theme="nordic"] #modalDetalhes code {
+  color: #4fc3f7 !important;
+  background-color: rgba(79,195,247,.1) !important;
+}
+
+[data-theme="nordic"] #modalDetalhes .badge.bg-light {
+  background-color: #2d3748 !important;
+  color: #e2e8f0 !important;
+  border-color: #4a5568 !important;
+}
+
+[data-theme="nordic"] #modalDetalhes .btn-secondary {
+  background-color: #2d3748 !important;
+  border-color: #4a5568 !important;
+  color: #e2e8f0 !important;
+}
