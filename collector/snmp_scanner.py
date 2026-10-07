@@ -1,158 +1,328 @@
-import os
+import asyncio
 import ipaddress
-from easysnmp import Session, EasySNMPError
+from typing import Any
 
+from pysnmp.hlapi.v3arch.asyncio import (
+    CommunityData,
+    ContextData,
+    ObjectIdentity,
+    ObjectType,
+    SnmpEngine,
+    UdpTransportTarget,
+    UsmUserData,
+    USM_AUTH_NONE,
+    USM_AUTH_HMAC96_MD5,
+    USM_AUTH_HMAC96_SHA,
+    USM_AUTH_HMAC192_SHA256,
+    USM_AUTH_HMAC256_SHA384,
+    USM_AUTH_HMAC384_SHA512,
+    USM_PRIV_NONE,
+    USM_PRIV_CBC56_DES,
+    USM_PRIV_CFB128_AES,
+    get_cmd,
+)
+
+
+# OIDs padrão de MIB-II.
+# Os OIDs privados 1.3.6.1.99.* do simulador foram removidos:
+# equipamentos reais não têm obrigação de implementá-los.
 OIDS = {
-    "descricao":     "1.3.6.1.2.1.1.1.0",
-    "oid_empresa":   "1.3.6.1.2.1.1.2.0",
-    "uptime":        "1.3.6.1.2.1.1.3.0",
-    "contato":       "1.3.6.1.2.1.1.4.0",
-    "hostname":      "1.3.6.1.2.1.1.5.0",
-    "localizacao":   "1.3.6.1.2.1.1.6.0",
-    "interfaces":    "1.3.6.1.2.1.2.1.0",
-    "roteador":      "1.3.6.1.2.1.4.1.0",
-    "modelo":        "1.3.6.1.99.1.1.0",
-    "sistema_op":    "1.3.6.1.99.1.2.0",
-    "armazenamento": "1.3.6.1.99.1.3.0",
-    "memoria":       "1.3.6.1.99.1.4.0",
-    "processador":   "1.3.6.1.99.1.5.0",
-    "serial_number": "1.3.6.1.99.1.6.0",
-    "mac_address":   "1.3.6.1.2.1.2.2.1.6.1",
+    "descricao": "1.3.6.1.2.1.1.1.0",
+    "oid_empresa": "1.3.6.1.2.1.1.2.0",
+    "uptime": "1.3.6.1.2.1.1.3.0",
+    "contato": "1.3.6.1.2.1.1.4.0",
+    "hostname": "1.3.6.1.2.1.1.5.0",
+    "localizacao": "1.3.6.1.2.1.1.6.0",
+    "interfaces": "1.3.6.1.2.1.2.1.0",
 }
 
-def detectar_tipo(dados: dict) -> str:
-    desc  = (dados.get("descricao")   or "").lower()
-    host  = (dados.get("hostname")    or "").lower()
-    modelo = (dados.get("modelo")     or "").lower()
-    is_router = str(dados.get("roteador", "0")).strip() == "1"
+AUTH_PROTOCOLS = {
+    "none": USM_AUTH_NONE,
+    "md5": USM_AUTH_HMAC96_MD5,
+    "sha": USM_AUTH_HMAC96_SHA,
+    "sha1": USM_AUTH_HMAC96_SHA,
+    "sha256": USM_AUTH_HMAC192_SHA256,
+    "sha384": USM_AUTH_HMAC256_SHA384,
+    "sha512": USM_AUTH_HMAC384_SHA512,
+}
 
-    if "cisco" in desc or "catalyst" in desc or "sw-" in host:
+PRIV_PROTOCOLS = {
+    "none": USM_PRIV_NONE,
+    "des": USM_PRIV_CBC56_DES,
+    "aes128": USM_PRIV_CFB128_AES,
+}
+
+
+def detectar_tipo(dados: dict[str, Any]) -> str:
+    descricao = (dados.get("descricao") or "").lower()
+    hostname = (dados.get("hostname") or "").lower()
+
+    if "cisco" in descricao or "catalyst" in descricao or "sw-" in hostname:
         return "Switch"
-    if "routeros" in desc or "mikrotik" in desc or "rtr-" in host:
+    if "routeros" in descricao or "mikrotik" in descricao or "rtr-" in hostname:
         return "Roteador"
-    if "unifi" in desc or "ubiquiti" in desc or "ap-" in host:
+    if "unifi" in descricao or "ubiquiti" in descricao or "ap-" in hostname:
         return "Access Point"
-    if "hikvision" in desc or "dahua" in desc or "cam-" in host or "camera" in modelo:
+    if "hikvision" in descricao or "dahua" in descricao or "cam-" in hostname:
         return "Camera IP"
-    if "smart-ups" in desc or "apc" in desc or "ups-" in host or "nobreak" in modelo or "ups" in modelo:
+    if "smart-ups" in descricao or "apc" in descricao or "ups-" in hostname:
         return "Nobreak"
-    if "laserjet" in desc or "printer" in desc or "imp-" in host:
+    if "laserjet" in descricao or "printer" in descricao or "imp-" in hostname:
         return "Impressora"
-    if "windows" in desc or "pc-" in host:
+    if "windows" in descricao or "pc-" in hostname:
         return "Computador"
-    if "notebook" in modelo or "inspiron" in modelo or "nb-" in host:
+    if "notebook" in descricao or "nb-" in hostname:
         return "Notebook"
-    if is_router:
-        return "Roteador"
-    try:
-        if int(dados.get("interfaces", 0)) >= 24:
-            return "Switch"
-    except Exception:
-        pass
-    if "linux" in desc or "ubuntu" in desc:
+    if "linux" in descricao or "ubuntu" in descricao:
         return "Servidor"
+
+    try:
+        if int(dados.get("interfaces") or 0) >= 24:
+            return "Switch"
+    except (TypeError, ValueError):
+        pass
+
     return "Desconhecido"
 
-def formatar_uptime(centisegundos: str) -> str:
+
+def formatar_uptime(centisegundos: str | None) -> str:
     try:
-        cs = int(centisegundos)
-        segundos = cs // 100
-        dias  = segundos // 86400
+        segundos = int(centisegundos or 0) // 100
+        dias = segundos // 86400
         horas = (segundos % 86400) // 3600
-        mins  = (segundos % 3600) // 60
-        return f"{dias}d {horas}h {mins}m"
-    except Exception:
-        return centisegundos
-    
-def formatar_mac(valor: str) -> str:
-    """Converte MAC em formato legível XX:XX:XX:XX:XX:XX"""
-    try:
-        if not valor or valor in ("", "None", "No Such Instance", "No Such Object"):
-            return "—"
-
-        # Remove espaços extras
-        valor = valor.strip()
-
-        # Caso 1: já está formatado XX:XX:XX:XX:XX:XX
-        if len(valor) == 17 and valor.count(":") == 5:
-            return valor.upper()
-
-        # Caso 2: hex puro sem separadores (12 chars) ex: "001A2B3C4D5E"
-        limpo = valor.replace(":", "").replace("-", "").replace(" ", "")
-        if len(limpo) == 12 and all(c in "0123456789ABCDEFabcdef" for c in limpo):
-            return ":".join(limpo[i:i+2].upper() for i in range(0, 12, 2))
-
-        # Caso 3: bytes binários retornados como string (ex: "\x00\x1a\x2b...")
-        # easysnmp às vezes retorna como repr de bytes
-        if len(valor) == 6:
-            return ":".join(f"{ord(c):02X}" for c in valor)
-
-        # Caso 4: string com caracteres especiais (bytes interpretados como latin-1)
-        # tenta converter cada char para hex
-        if 4 <= len(valor) <= 8:
-            try:
-                hexval = valor.encode("latin-1").hex()
-                if len(hexval) == 12:
-                    return ":".join(hexval[i:i+2].upper() for i in range(0, 12, 2))
-            except Exception:
-                pass
-
-        return "—"
-    except Exception:
+        minutos = (segundos % 3600) // 60
+        return f"{dias}d {horas}h {minutos}m"
+    except (TypeError, ValueError):
         return "—"
 
-def escanear_dispositivo(ip: str, community: str = "public") -> dict:
+
+def _criar_autenticacao(perfil: dict[str, Any]):
+    versao = str(perfil.get("versao", "")).lower()
+
+    if versao in {"1", "v1"}:
+        community = perfil.get("community")
+        if not community:
+            raise ValueError("Perfil SNMPv1 precisa de community.")
+        return CommunityData(str(community), mpModel=0)
+
+    if versao in {"2", "2c", "v2c"}:
+        community = perfil.get("community")
+        if not community:
+            raise ValueError("Perfil SNMPv2c precisa de community.")
+        return CommunityData(str(community), mpModel=1)
+
+    if versao in {"3", "v3"}:
+        usuario = perfil.get("usuario")
+        if not usuario:
+            raise ValueError("Perfil SNMPv3 precisa de usuario.")
+
+        protocolo_auth = str(perfil.get("auth_protocol", "none")).lower()
+        protocolo_priv = str(perfil.get("priv_protocol", "none")).lower()
+        chave_auth = perfil.get("auth_key") or None
+        chave_priv = perfil.get("priv_key") or None
+
+        if protocolo_auth not in AUTH_PROTOCOLS:
+            raise ValueError("Protocolo de autenticação SNMPv3 não suportado.")
+        if protocolo_priv not in PRIV_PROTOCOLS:
+            raise ValueError("Protocolo de privacidade SNMPv3 não suportado.")
+        if protocolo_auth != "none" and not chave_auth:
+            raise ValueError("Perfil SNMPv3 precisa da chave de autenticação.")
+        if protocolo_priv != "none" and not chave_priv:
+            raise ValueError("Perfil SNMPv3 precisa da chave de privacidade.")
+
+        return UsmUserData(
+            str(usuario),
+            authKey=chave_auth,
+            privKey=chave_priv,
+            authProtocol=AUTH_PROTOCOLS[protocolo_auth],
+            privProtocol=PRIV_PROTOCOLS[protocolo_priv],
+        )
+
+    raise ValueError("Versão SNMP inválida. Use v1, v2c ou v3.")
+
+
+def _normalizar_perfis(
+    community: str,
+    perfis_credenciais: list[dict[str, Any]] | None,
+) -> list[Any]:
+    # "public" fica somente como padrão para o laboratório simulado.
+    # Na rede real, informe as credenciais SNMP fornecidas pela empresa.
+    perfis = perfis_credenciais or [
+        {"versao": "v2c", "community": community}
+    ]
+
+    if not perfis:
+        raise ValueError("Informe ao menos um perfil de credenciais SNMP.")
+
+    return [_criar_autenticacao(perfil) for perfil in perfis]
+
+
+def _valor_texto(varbind) -> str | None:
+    valor = varbind[1].prettyPrint()
+
+    if not valor:
+        return None
+
+    inicio = valor.lower()
+    if inicio.startswith(("no such object", "no such instance", "end of mib")):
+        return None
+
+    return valor
+
+
+async def _consultar_dispositivo(
+    engine: SnmpEngine,
+    ip: str,
+    autenticacoes: list[Any],
+    timeout: float,
+) -> dict[str, Any]:
     resultado = {"ip": ip, "status": "offline", "dados": {}}
-    try:
-        session = Session(
-            hostname=ip,
-            community=community,
-            version=2,
-            timeout=2,
-            retries=1,
-        )
-        for chave, oid in OIDS.items():
-            try:
-                val = session.get(oid)
-                resultado["dados"][chave] = str(val.value)
-            except Exception:
-                resultado["dados"][chave] = None
 
-        resultado["dados"]["uptime_fmt"] = formatar_uptime(
-            resultado["dados"].get("uptime", "0")
-        )
-        resultado["dados"]["mac_address"] = formatar_mac(
-            resultado["dados"].get("mac_address", "")
-        )
-        resultado["dados"]["tipo"] = detectar_tipo(resultado["dados"])
+    objetos = [
+        ObjectType(ObjectIdentity(oid))
+        for oid in OIDS.values()
+    ]
+
+    for autenticacao in autenticacoes:
+        try:
+            destino = await UdpTransportTarget.create(
+                (ip, 161),
+                timeout=timeout,
+                retries=0,
+            )
+
+            indicacao, estado, indice, varbinds = await get_cmd(
+                engine,
+                autenticacao,
+                destino,
+                ContextData(),
+                *objetos,
+            )
+        except Exception:
+            continue
+
+        # Uma resposta SNMP confirma que o equipamento suporta SNMP,
+        # mesmo se algum objeto solicitado não estiver disponível.
+        if indicacao:
+            continue
+
+        dados = {campo: None for campo in (
+            "descricao",
+            "oid_empresa",
+            "uptime",
+            "contato",
+            "hostname",
+            "localizacao",
+            "interfaces",
+            "roteador",
+            "modelo",
+            "sistema_op",
+            "armazenamento",
+            "memoria",
+            "processador",
+            "serial_number",
+            "mac_address",
+        )}
+
+        for campo, varbind in zip(OIDS, varbinds):
+            dados[campo] = _valor_texto(varbind)
+
+        dados["uptime_fmt"] = formatar_uptime(dados.get("uptime"))
+        dados["tipo"] = detectar_tipo(dados)
+
         resultado["status"] = "online"
-
-    except EasySNMPError:
-        resultado["status"] = "offline"
-    except Exception as e:
-        resultado["status"] = "erro"
-        resultado["erro"] = str(e)
+        resultado["dados"] = dados
+        return resultado
 
     return resultado
 
-def descobrir_hosts(rede: str = "172.20.0.0/24") -> list:
-    hosts = []
-    try:
-        import nmap
-        scanner = nmap.PortScanner()
-        scanner.scan(hosts=rede, arguments="-sn --host-timeout 3s")
-        hosts = [h for h in scanner.all_hosts()
-                 if scanner[h].state() == "up"]
-    except Exception:
-        network = ipaddress.ip_network(rede, strict=False)
-        hosts = [str(ip) for ip in network.hosts()]
-    return hosts
 
-def escanear_rede(rede: str = "172.20.0.0/24", community: str = "public") -> list:
-    hosts = descobrir_hosts(rede)
-    resultados = []
-    for ip in hosts:
-        resultado = escanear_dispositivo(ip, community)
-        if resultado["status"] == "online":
-            resultados.append(resultado)
-    return resultados
+def _listar_ips(rede: str, limite_hosts: int) -> list[str]:
+    try:
+        sub_rede = ipaddress.ip_network(rede, strict=False)
+    except ValueError as erro:
+        raise ValueError(f"sub_rede inválida: {rede}") from erro
+
+    if sub_rede.version != 4:
+        raise ValueError("Esta primeira versão do coletor aceita apenas IPv4.")
+
+    quantidade = sub_rede.num_addresses
+    if sub_rede.prefixlen < 31:
+        quantidade -= 2
+
+    if quantidade > limite_hosts:
+        raise ValueError(
+            f"A rede contém {quantidade} endereços. "
+            f"O limite desta varredura é {limite_hosts}."
+        )
+
+    return [str(ip) for ip in sub_rede.hosts()]
+
+
+async def _escanear_rede(
+    ips: list[str],
+    autenticacoes: list[Any],
+    max_concorrencia: int,
+    timeout: float,
+) -> list[dict[str, Any]]:
+    engine = SnmpEngine()
+    semaforo = asyncio.Semaphore(max_concorrencia)
+
+    async def consultar_com_limite(ip: str):
+        async with semaforo:
+            return await _consultar_dispositivo(
+                engine,
+                ip,
+                autenticacoes,
+                timeout,
+            )
+
+    try:
+        tarefas = [consultar_com_limite(ip) for ip in ips]
+        resultados = await asyncio.gather(*tarefas)
+    finally:
+        engine.close_dispatcher()
+
+    return [
+        resultado
+        for resultado in resultados
+        if resultado["status"] == "online"
+    ]
+
+
+def escanear_dispositivo(
+    ip: str,
+    community: str = "public",
+    perfis_credenciais: list[dict[str, Any]] | None = None,
+    timeout: float = 1.5,
+) -> dict[str, Any]:
+    autenticacoes = _normalizar_perfis(community, perfis_credenciais)
+    engine = SnmpEngine()
+
+    try:
+        return asyncio.run(
+            _consultar_dispositivo(engine, ip, autenticacoes, timeout)
+        )
+    finally:
+        engine.close_dispatcher()
+
+
+def escanear_rede(
+    rede: str = "172.20.0.0/24",
+    community: str = "public",
+    perfis_credenciais: list[dict[str, Any]] | None = None,
+    max_concorrencia: int = 32,
+    limite_hosts: int = 4096,
+    timeout: float = 1.5,
+) -> list[dict[str, Any]]:
+    ips = _listar_ips(rede, limite_hosts)
+    autenticacoes = _normalizar_perfis(community, perfis_credenciais)
+
+    return asyncio.run(
+        _escanear_rede(
+            ips,
+            autenticacoes,
+            max_concorrencia,
+            timeout,
+        )
+    )
