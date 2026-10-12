@@ -3,6 +3,8 @@
 import argparse
 import getpass
 import json
+import logging
+from logging.handlers import RotatingFileHandler
 import os
 import subprocess
 import sys
@@ -46,6 +48,19 @@ def _salvar_estado(caminho, estado):
 def _tls_verification(estado):
     ca = estado.get("ca_bundle")
     return ca if ca else True
+
+
+def _configurar_log(caminho):
+    if not caminho:
+        return
+    arquivo = Path(caminho).expanduser()
+    arquivo.parent.mkdir(parents=True, exist_ok=True)
+    handler = RotatingFileHandler(arquivo, maxBytes=1_000_000, backupCount=3, encoding="utf-8")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+        handlers=[handler],
+    )
 
 
 def _enviar(sessao, estado, url, dados):
@@ -126,7 +141,9 @@ def coletar_uma_vez(caminho, permitir_http):
     url = _validar_url(estado["server_url"], permitir_http)
     dados = coletar_inventario_local()
     retorno = _enviar(requests.Session(), estado, url, dados)
-    print(retorno.get("mensagem", "Coleta enviada."))
+    mensagem = retorno.get("mensagem", "Coleta enviada.")
+    logging.info(mensagem)
+    print(mensagem)
 
 
 def coletar(args):
@@ -137,7 +154,8 @@ def coletar(args):
     while True:
         try:
             coletar_uma_vez(caminho, args.allow_insecure_http)
-        except (OSError, ValueError, requests.RequestException, RuntimeError, KeyError, subprocess.SubprocessError) as erro:
+        except Exception as erro:
+            logging.exception("Falha na coleta; nova tentativa em %ss: %s", args.interval, erro)
             print(f"Falha na coleta; nova tentativa em {args.interval:g}s: {erro}", file=sys.stderr)
         time.sleep(args.interval)
 
@@ -146,6 +164,7 @@ def main():
     parser = argparse.ArgumentParser(description="Coleta inventário local e envia ao servidor RADAR.")
     parser.add_argument("--state-file", help="Caminho do arquivo local com a identidade e token do agente.")
     parser.add_argument("--ca-bundle", help="Certificado CA PEM confiável para validar HTTPS na etapa de registro.")
+    parser.add_argument("--log-file", help="Arquivo local de log com rotação; restrinja o acesso ao sistema e administradores.")
     parser.add_argument("--allow-insecure-http", action="store_true", help="Permite HTTP apenas para laboratório isolado; não usar em redes reais.")
     parser.add_argument("--interval", type=float, default=0, help="Repete a coleta neste intervalo em segundos; 0 envia apenas uma vez.")
     modos = parser.add_mutually_exclusive_group()
@@ -153,6 +172,7 @@ def main():
     modos.add_argument("--once", action="store_true", help="Coleta e envia uma vez (modo padrão).")
     parser.add_argument("--server-url", help="URL base do servidor, necessária com --register.")
     args = parser.parse_args()
+    _configurar_log(args.log_file)
     if args.interval and args.interval < 60:
         parser.error("--interval deve ser 0 (uma coleta) ou pelo menos 60 segundos.")
 
