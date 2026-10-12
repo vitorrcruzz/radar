@@ -1,5 +1,24 @@
 from datetime import datetime, date
+from werkzeug.security import check_password_hash, generate_password_hash
 from backend.database import db
+
+
+class Usuario(db.Model):
+    __tablename__ = "usuarios"
+
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(120), nullable=False)
+    email = db.Column(db.String(254), unique=True, nullable=False, index=True)
+    senha_hash = db.Column(db.String(256), nullable=False)
+    perfil = db.Column(db.String(20), nullable=False, default="usuario")
+    ativo = db.Column(db.Boolean, nullable=False, default=True)
+    criado_em = db.Column(db.DateTime, nullable=False, default=datetime.now)
+
+    def definir_senha(self, senha):
+        self.senha_hash = generate_password_hash(senha)
+
+    def verificar_senha(self, senha):
+        return check_password_hash(self.senha_hash, senha)
 
 class Dispositivo(db.Model):
     __tablename__ = "dispositivos"
@@ -25,6 +44,12 @@ class Dispositivo(db.Model):
     licenca_expira   = db.Column(db.Date)
     ultima_vez       = db.Column(db.DateTime, default=datetime.now)
     criado_em        = db.Column(db.DateTime, default=datetime.now)
+    campos_manuais   = db.relationship(
+        "CampoManualDispositivo",
+        back_populates="dispositivo",
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
 
     def dias_para_expirar(self):
         if self.licenca_expira is None:
@@ -46,7 +71,7 @@ class Dispositivo(db.Model):
 
     def to_dict(self):
         dias = self.dias_para_expirar()
-        return {
+        dados = {
             "id":               self.id,
             "ip":               self.ip,
             "hostname":         self.hostname         or "—",
@@ -71,6 +96,49 @@ class Dispositivo(db.Model):
             "ultima_vez":       self.ultima_vez.strftime("%d/%m/%Y %H:%M:%S") if self.ultima_vez else "—",
             "criado_em":        self.criado_em.strftime("%d/%m/%Y %H:%M:%S") if self.criado_em else "—",
         }
+        dados["fontes_manuais"] = []
+        for campo_manual in self.campos_manuais:
+            dados[campo_manual.campo] = campo_manual.valor or "—"
+            dados["fontes_manuais"].append(campo_manual.campo)
+        return dados
+
+
+class CampoManualDispositivo(db.Model):
+    __tablename__ = "campos_manuais_dispositivo"
+
+    id             = db.Column(db.Integer, primary_key=True)
+    dispositivo_id = db.Column(db.Integer, db.ForeignKey("dispositivos.id"), nullable=False)
+    campo          = db.Column(db.String(50), nullable=False)
+    valor          = db.Column(db.Text)
+    atualizado_em  = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    dispositivo = db.relationship("Dispositivo", back_populates="campos_manuais")
+    __table_args__ = (db.UniqueConstraint("dispositivo_id", "campo"),)
+
+
+class Agente(db.Model):
+    __tablename__ = "agentes"
+
+    id             = db.Column(db.String(36), primary_key=True)
+    dispositivo_id = db.Column(db.Integer, db.ForeignKey("dispositivos.id"), unique=True, nullable=False)
+    token_hash     = db.Column(db.String(64), nullable=False)
+    plataforma     = db.Column(db.String(40), nullable=False)
+    ativo          = db.Column(db.Boolean, default=True, nullable=False)
+    registrado_em = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    ultima_coleta  = db.Column(db.DateTime)
+
+    dispositivo = db.relationship("Dispositivo")
+
+
+class ColetaAgente(db.Model):
+    __tablename__ = "coletas_agente"
+
+    id          = db.Column(db.Integer, primary_key=True)
+    agente_id   = db.Column(db.String(36), db.ForeignKey("agentes.id"), nullable=False, index=True)
+    recebido_em = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    dados_json  = db.Column(db.Text, nullable=False)
+
+    agente = db.relationship("Agente")
 
 
 class HistoricoVarredura(db.Model):

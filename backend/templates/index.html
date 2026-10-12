@@ -64,10 +64,18 @@
 
   <div class="topbar">
     <h4 id="page-title">Dashboard</h4>
-    <button id="btn-scan" class="btn btn-sm px-3" onclick="dispararVarredura()">
-      <span id="scan-spinner" class="spinner-border spinner-border-sm me-1"></span>
-      <i class="bi bi-radar me-1"></i> Escanear Agora
-    </button>
+    <div class="d-flex align-items-center gap-2">
+      <span class="small text-secondary">{{ usuario_logado.nome }} · {{ 'Administrador' if usuario_logado.perfil == 'admin' else 'Usuário' }}</span>
+      {% if usuario_logado.perfil == 'admin' %}
+      <button id="btn-scan" class="btn btn-sm px-3" onclick="dispararVarredura()">
+        <span id="scan-spinner" class="spinner-border spinner-border-sm me-1"></span>
+        <i class="bi bi-radar me-1"></i> Escanear Agora
+      </button>
+      {% endif %}
+      <form action="{{ url_for('auth.logout') }}" method="post" class="m-0">
+        <button class="btn btn-outline-secondary btn-sm" type="submit">Sair</button>
+      </form>
+    </div>
   </div>
 
   <!-- ── Seção Dashboard ───────────────────────────── -->
@@ -235,6 +243,7 @@
 <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>window.RADAR_PODE_EDITAR = {{ (usuario_logado.perfil == 'admin') | tojson }};</script>
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 
 </body>

@@ -1,5 +1,6 @@
 import asyncio
 import ipaddress
+import re
 from typing import Any
 
 from pysnmp.hlapi.v3arch.asyncio import (
@@ -20,6 +21,7 @@ from pysnmp.hlapi.v3arch.asyncio import (
     USM_PRIV_CBC56_DES,
     USM_PRIV_CFB128_AES,
     get_cmd,
+    walk_cmd,
 )
 
 
@@ -170,6 +172,300 @@ def _valor_texto(varbind) -> str | None:
     return valor
 
 
+def detectar_sistema_operacional(descricao: str | None) -> str | None:
+    if not descricao:
+        return None
+
+    windows = re.search(
+        r"Windows Version\s+([\d.]+)(?:\s+\(Build\s+(\d+)\b[^)]*\))?",
+        descricao,
+        re.IGNORECASE,
+    )
+    if windows:
+        versao, build = windows.groups()
+        if build:
+            # O serviço SNMP do Windows pode reportar a versão de
+            # compatibilidade 6.3 mesmo em versões atuais. Quando o build é
+            # conhecido, ele é uma identificação mais útil do produto.
+            versoes_windows = {
+                10240: "Windows 10 1507",
+                10586: "Windows 10 1511",
+                14393: "Windows 10 1607",
+                15063: "Windows 10 1703",
+                16299: "Windows 10 1709",
+                17134: "Windows 10 1803",
+                17763: "Windows 10 1809 / Windows Server 2019",
+                18362: "Windows 10 1903",
+                18363: "Windows 10 1909",
+                19041: "Windows 10 2004",
+                19042: "Windows 10 20H2",
+                19043: "Windows 10 21H1",
+                19044: "Windows 10 21H2",
+                19045: "Windows 10 22H2",
+                20348: "Windows Server 2022",
+                22000: "Windows 11 21H2",
+                22621: "Windows 11 22H2",
+                22631: "Windows 11 23H2",
+                26100: "Windows 11 24H2",
+                26200: "Windows 11 25H2",
+            }
+            produto = versoes_windows.get(int(build))
+            if produto:
+                return f"{produto} (build {build})"
+            return f"Windows build {build} (versão SNMP {versao})"
+
+        return f"Windows (versão SNMP {versao})"
+
+    linux = re.search(r"\bLinux\s+\S+\s+(\S+)", descricao, re.IGNORECASE)
+    if linux:
+        return f"Linux (kernel {linux.group(1)})"
+    if re.search(r"\bLinux\b", descricao, re.IGNORECASE):
+        return "Linux"
+
+    return None
+
+
+async def _coletar_modelo_serial(engine, autenticacao, destino):
+    """Lê modelo e serial da linha chassis, se o agente expuser ENTITY-MIB."""
+    raiz = "1.3.6.1.2.1.47.1.1.1.1"
+    tabelas = {
+        "classe": f"{raiz}.5",
+        "modelo": f"{raiz}.13",
+        "serial": f"{raiz}.11",
+    }
+    dados = {campo: None for campo in tabelas}
+    for campo, oid in tabelas.items():
+        dados[campo] = await _caminhar_oid(
+            engine,
+            autenticacao,
+            destino,
+            oid,
+        )
+
+    chassis = set()
+    for oid_texto, valor in dados["classe"].items():
+        try:
+            sufixo = oid_texto.rsplit(".", 1)[1]
+            if re.search(r"(?:^|\()3\)?$", valor.strip()):
+                chassis.add(sufixo)
+        except (IndexError, ValueError):
+            continue
+
+    resultado = {"modelo": None, "serial_number": None}
+    for campo, coluna in (("modelo", "modelo"), ("serial", "serial_number")):
+        for indice in sorted(chassis, key=lambda item: int(item)):
+            valor = dados[campo].get(f"{raiz}.{13 if campo == 'modelo' else 11}.{indice}")
+            if valor and valor.strip() and valor.strip().lower() not in {"unknown", "not specified"}:
+                resultado[coluna] = valor.strip()
+                break
+
+    return resultado
+
+
+async def _caminhar_oid(engine, autenticacao, destino, oid_raiz):
+    valores = {}
+
+    try:
+        async for indicacao, estado, indice, varbinds in walk_cmd(
+            engine,
+            autenticacao,
+            destino,
+            ContextData(),
+            ObjectType(ObjectIdentity(oid_raiz)),
+            lookupMib=False,
+            lexicographicMode=False,
+            maxRows=100,
+        ):
+            if indicacao or estado:
+                break
+
+            for varbind in varbinds:
+                oid = varbind[0].prettyPrint().lstrip(".")
+                valores[oid] = varbind[1].prettyPrint()
+    except Exception:
+        return {}
+
+    return valores
+
+
+async def _coletar_memoria_armazenamento(engine, autenticacao, destino):
+    dados = {"memoria": None, "armazenamento": None}
+
+    # hrMemorySize informa a memória física em unidades de 1 KiB.
+    try:
+        indicacao, estado, indice, varbinds = await get_cmd(
+            engine,
+            autenticacao,
+            destino,
+            ContextData(),
+            ObjectType(ObjectIdentity("1.3.6.1.2.1.25.2.2.0")),
+        )
+
+        if not indicacao and not estado and varbinds:
+            memoria_kib = int(varbinds[0][1])
+            dados["memoria"] = f"{memoria_kib / (1024 ** 2):.2f} GiB"
+    except Exception:
+        pass
+
+    # A tabela contém descrição, tamanho da unidade e quantidade de unidades.
+    raiz = "1.3.6.1.2.1.25.2.3.1"
+    valores = await _caminhar_oid(engine, autenticacao, destino, raiz)
+    prefixo = tuple(int(parte) for parte in raiz.split("."))
+    linhas = {}
+
+    for oid_texto, valor in valores.items():
+        try:
+            oid = tuple(int(parte) for parte in oid_texto.split("."))
+        except ValueError:
+            continue
+
+        sufixo = oid[len(prefixo):]
+        if oid[:len(prefixo)] != prefixo or len(sufixo) != 2:
+            continue
+
+        coluna, indice = sufixo
+        linhas.setdefault(indice, {})[coluna] = valor
+
+    volumes = []
+    for linha in linhas.values():
+        descricao = linha.get(3, "")
+        unidade = linha.get(4)
+        tamanho = linha.get(5)
+
+        if not descricao or not unidade or not tamanho:
+            continue
+
+        # Inclui volumes com letra (C:, D: etc.) e deixa de fora RAM e swap.
+        correspondencia = re.match(r"^([A-Za-z]):\\", descricao)
+        if not correspondencia:
+            continue
+
+        try:
+            total_bytes = int(unidade) * int(tamanho)
+        except ValueError:
+            continue
+
+        total_gib = total_bytes / (1024 ** 3)
+        volumes.append(f"{correspondencia.group(1).upper()}: {total_gib:.1f} GiB")
+
+    if volumes:
+        dados["armazenamento"] = " | ".join(sorted(volumes))
+
+    return dados
+
+
+async def _coletar_identificacao_processador(
+    engine,
+    autenticacao,
+    destino,
+    descricao_sistema: str | None,
+) -> str | None:
+    assinatura = None
+    if descricao_sistema:
+        correspondencia = re.search(
+            r"Hardware:\s*(.+?)\s*-\s*Software:",
+            descricao_sistema,
+            re.IGNORECASE,
+        )
+        if correspondencia:
+            assinatura = correspondencia.group(1).strip()
+
+    raiz_carga_cpu = "1.3.6.1.2.1.25.3.3.1.2"
+    cargas = await _caminhar_oid(
+        engine,
+        autenticacao,
+        destino,
+        raiz_carga_cpu,
+    )
+    quantidade_logica = 0
+    for valor in cargas.values():
+        try:
+            int(valor)
+            quantidade_logica += 1
+        except ValueError:
+            continue
+
+    partes = []
+    if assinatura:
+        partes.append(assinatura)
+    if quantidade_logica:
+        partes.append(f"{quantidade_logica} processadores lógicos")
+
+    return "; ".join(partes) or None
+
+
+async def _obter_ifindex_por_ipv4(engine, autenticacao, destino, ip: str):
+    octetos_ip = tuple(int(parte) for parte in ip.split("."))
+
+    # Forma IPv4 legada: ipAdEntIfIndex.<octeto1>.<octeto2>.<octeto3>.<octeto4>
+    raiz_legada = "1.3.6.1.2.1.4.20.1.2"
+    prefixo_legado = tuple(int(parte) for parte in raiz_legada.split("."))
+    entradas = await _caminhar_oid(
+        engine,
+        autenticacao,
+        destino,
+        raiz_legada,
+    )
+
+    for oid_texto, valor in entradas.items():
+        try:
+            oid = tuple(int(parte) for parte in oid_texto.split("."))
+            if oid[:len(prefixo_legado)] == prefixo_legado:
+                if oid[len(prefixo_legado):] == octetos_ip:
+                    return int(valor)
+        except ValueError:
+            continue
+
+    # Forma atual: ipAddressIfIndex.<ipv4(1)>.<comprimento(4)>.<octetos>
+    raiz_atual = "1.3.6.1.2.1.4.34.1.3"
+    prefixo_atual = tuple(int(parte) for parte in raiz_atual.split("."))
+    entradas = await _caminhar_oid(
+        engine,
+        autenticacao,
+        destino,
+        raiz_atual,
+    )
+
+    sufixo_ip_atual = (1, 4, *octetos_ip)
+    for oid_texto, valor in entradas.items():
+        try:
+            oid = tuple(int(parte) for parte in oid_texto.split("."))
+            if oid[:len(prefixo_atual)] == prefixo_atual:
+                if oid[len(prefixo_atual):] == sufixo_ip_atual:
+                    return int(valor)
+        except ValueError:
+            continue
+
+    return None
+
+
+async def _coletar_mac_address(engine, autenticacao, destino, ip: str) -> str | None:
+    indice = await _obter_ifindex_por_ipv4(engine, autenticacao, destino, ip)
+    if indice is None:
+        return None
+
+    oid_mac = f"1.3.6.1.2.1.2.2.1.6.{indice}"
+    try:
+        indicacao, estado, indice_erro, varbinds = await get_cmd(
+            engine,
+            autenticacao,
+            destino,
+            ContextData(),
+            ObjectType(ObjectIdentity(oid_mac)),
+        )
+        if indicacao or estado or not varbinds:
+            return None
+
+        valor = varbinds[0][1]
+        octetos = valor.asOctets() if hasattr(valor, "asOctets") else bytes(valor)
+        if len(octetos) != 6 or not any(octetos):
+            return None
+
+        return ":".join(f"{octeto:02X}" for octeto in octetos)
+    except Exception:
+        return None
+
+
 async def _consultar_dispositivo(
     engine: SnmpEngine,
     ip: str,
@@ -226,6 +522,34 @@ async def _consultar_dispositivo(
 
         for campo, varbind in zip(OIDS, varbinds):
             dados[campo] = _valor_texto(varbind)
+
+        dados.update(
+            await _coletar_memoria_armazenamento(
+                engine,
+                autenticacao,
+                destino,
+            )
+        )
+        dados.update(
+            await _coletar_modelo_serial(
+                engine,
+                autenticacao,
+                destino,
+            )
+        )
+        dados["mac_address"] = await _coletar_mac_address(
+            engine,
+            autenticacao,
+            destino,
+            ip,
+        )
+        dados["sistema_op"] = detectar_sistema_operacional(dados.get("descricao"))
+        dados["processador"] = await _coletar_identificacao_processador(
+            engine,
+            autenticacao,
+            destino,
+            dados.get("descricao"),
+        )
 
         dados["uptime_fmt"] = formatar_uptime(dados.get("uptime"))
         dados["tipo"] = detectar_tipo(dados)
@@ -299,12 +623,18 @@ def escanear_dispositivo(
     autenticacoes = _normalizar_perfis(community, perfis_credenciais)
     engine = SnmpEngine()
 
-    try:
-        return asyncio.run(
-            _consultar_dispositivo(engine, ip, autenticacoes, timeout)
-        )
-    finally:
-        engine.close_dispatcher()
+    async def consultar_e_fechar_motor():
+        try:
+            return await _consultar_dispositivo(
+                engine,
+                ip,
+                autenticacoes,
+                timeout,
+            )
+        finally:
+            engine.close_dispatcher()
+
+    return asyncio.run(consultar_e_fechar_motor())
 
 
 def escanear_rede(

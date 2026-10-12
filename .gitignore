@@ -8,6 +8,8 @@ venv/
 .env
 .env.*
 !.env.example
+certs/
+*.key
 
 # Local application data
 instance/

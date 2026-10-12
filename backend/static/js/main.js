@@ -256,7 +256,14 @@ async function carregarGraficoHistorico() {
 }
 
 // ── Modal de detalhes ──────────────────────────────────
+function escaparHtml(valor) {
+  return String(valor ?? '—').replace(/[&<>"']/g, caractere => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[caractere]);
+}
+
 function abrirModal(d) {
+  window._dispositivoAtual = d;
   const statusBadge = d.status === 'online'
     ? '<span class="badge badge-online px-2 py-1">● Online</span>'
     : '<span class="badge badge-offline px-2 py-1">○ Offline</span>';
@@ -273,10 +280,11 @@ function abrirModal(d) {
   _t = t; _tc = tc; _tm = tm; _ti = ti;
 
   document.getElementById('modal-corpo').innerHTML = `
+    <div id="detalhes-view">
     <div class="row g-3">
       <div class="col-12">
         <div class="d-flex align-items-center gap-2 mb-2">
-          <span class="badge bg-light text-dark border fs-6" style="${t?'background:#2d3748!important;color:#e2e8f0!important;border-color:#4a5568!important':''}">${d.tipo}</span>
+          <span class="badge bg-light text-dark border fs-6" style="${t?'background:#2d3748!important;color:#e2e8f0!important;border-color:#4a5568!important':''}">${escaparHtml(d.tipo)}</span>
           ${statusBadge}
         </div>
       </div>
@@ -286,13 +294,13 @@ function abrirModal(d) {
           <div class="info-label"><i class="bi bi-cpu me-1"></i>Hardware</div>
           <table class="table table-sm table-borderless mb-0">
             <tr><td style="width:45%;${tm}">Modelo</td>
-                <td style="${tc}"><strong>${d.modelo}</strong></td></tr>
+                <td style="${tc}"><strong>${escaparHtml(d.modelo)}</strong></td></tr>
             <tr><td style="${tm}">Processador</td>
-                <td style="${tc}"><strong>${d.processador}</strong></td></tr>
+                <td style="${tc}"><strong>${escaparHtml(d.processador)}</strong></td></tr>
             <tr><td style="${tm}">Memória</td>
-                <td style="${tc}"><strong>${d.memoria}</strong></td></tr>
+                <td style="${tc}"><strong>${escaparHtml(d.memoria)}</strong></td></tr>
             <tr><td style="${tm}">Armazenamento</td>
-                <td style="${tc}"><strong>${d.armazenamento}</strong></td></tr>
+                <td style="${tc}"><strong>${escaparHtml(d.armazenamento)}</strong></td></tr>
           </table>
         </div>
       </div>
@@ -302,17 +310,17 @@ function abrirModal(d) {
           <div class="info-label"><i class="bi bi-hdd-network me-1"></i>Rede</div>
           <table class="table table-sm table-borderless mb-0">
             <tr><td style="width:45%;${tm}">IP</td>
-                <td><code style="${t?'color:#4fc3f7;background:rgba(79,195,247,.1);padding:.1rem .3rem;border-radius:.3rem':''}">${d.ip}</code></td></tr>
+                <td><code style="${t?'color:#4fc3f7;background:rgba(79,195,247,.1);padding:.1rem .3rem;border-radius:.3rem':''}">${escaparHtml(d.ip)}</code></td></tr>
             <tr><td style="${tm}">Hostname</td>
-                <td style="${tc}"><strong>${d.hostname}</strong></td></tr>
+                <td style="${tc}"><strong>${escaparHtml(d.hostname)}</strong></td></tr>
             <tr><td style="${tm}">Interfaces</td>
                 <td style="${tc}"><strong>${d.interfaces ?? '—'}</strong></td></tr>
             <tr><td style="${tm}">Uptime</td>
-                <td style="${tc}"><strong>${d.uptime}</strong></td></tr>
+                <td style="${tc}"><strong>${escaparHtml(d.uptime)}</strong></td></tr>
                 <tr><td style="width:45%;${tm}">MAC Address</td>
-                <td style="${tc}"><code style="${t?'color:#4fc3f7;background:rgba(79,195,247,.1);padding:.1rem .3rem;border-radius:.3rem':''}">${d.mac_address}</code></td></tr>
+                <td style="${tc}"><code style="${t?'color:#4fc3f7;background:rgba(79,195,247,.1);padding:.1rem .3rem;border-radius:.3rem':''}">${escaparHtml(d.mac_address)}</code></td></tr>
             <tr><td style="${tm}">Serial Number</td>
-                <td style="${tc}"><strong>${d.serial_number}</strong></td></tr>
+                <td style="${tc}"><strong>${escaparHtml(d.serial_number)}</strong></td></tr>
           </table>
         </div>
       </div>
@@ -322,9 +330,9 @@ function abrirModal(d) {
           <div class="info-label"><i class="bi bi-display me-1"></i>Sistema</div>
           <table class="table table-sm table-borderless mb-0">
             <tr><td style="width:45%;${tm}">Sistema Op.</td>
-                <td style="${tc}"><strong>${d.sistema_op}</strong></td></tr>
+                <td style="${tc}"><strong>${escaparHtml(d.sistema_op)}</strong></td></tr>
             <tr><td style="${tm}">Descrição</td>
-                <td style="${tm}"><small>${d.descricao}</small></td></tr>
+                <td style="${tm}"><small>${escaparHtml(d.descricao)}</small></td></tr>
           </table>
         </div>
       </div>
@@ -348,17 +356,92 @@ function abrirModal(d) {
           <div class="info-label"><i class="bi bi-geo-alt me-1"></i>Localização e contato</div>
           <table class="table table-sm table-borderless mb-0">
             <tr><td style="width:20%;${tm}">Local</td>
-                <td style="${tc}"><strong>${d.localizacao}</strong></td></tr>
+                <td style="${tc}"><strong>${escaparHtml(d.localizacao)}</strong></td></tr>
             <tr><td style="${tm}">Contato</td>
-                <td style="${tm}"><small>${d.contato}</small></td></tr>
+                <td style="${tm}"><small>${escaparHtml(d.contato)}</small></td></tr>
             <tr><td style="${tm}">Última varredura</td>
                 <td style="${tm}"><small>${d.ultima_vez}</small></td></tr>
           </table>
         </div>
       </div>
     </div>
+    ${window.RADAR_PODE_EDITAR ? `<div class="text-end mt-3">
+      <button class="btn btn-outline-primary btn-sm" onclick="editarCamposManuais()">
+        <i class="bi bi-pencil-square me-1"></i>Editar cadastro manualmente
+      </button>
+    </div>` : ''}
+    </div>
+    <div id="manual-view" style="display:none">
+      <p class="text-muted small">Os valores preenchidos aqui têm prioridade sobre a coleta automática. Apague um valor para voltar a usar o dado coletado.</p>
+      <div id="manual-campos" class="row g-3"></div>
+      <div class="d-flex justify-content-end gap-2 mt-3">
+        <button class="btn btn-secondary btn-sm" onclick="cancelarEdicaoManual()">Cancelar</button>
+        <button class="btn btn-primary btn-sm" onclick="salvarEdicaoManual()">Salvar dados</button>
+      </div>
+    </div>
   `;
-  new bootstrap.Modal(document.getElementById('modalDetalhes')).show();
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('modalDetalhes')).show();
+}
+
+const camposEditaveis = [
+  ['hostname', 'Hostname'], ['tipo', 'Tipo'], ['modelo', 'Modelo'],
+  ['sistema_op', 'Sistema operacional'], ['processador', 'Processador'],
+  ['memoria', 'Memória'], ['armazenamento', 'Armazenamento'],
+  ['mac_address', 'MAC Address'], ['serial_number', 'Número de série'],
+  ['descricao', 'Descrição'], ['localizacao', 'Localização'], ['contato', 'Contato']
+];
+
+function editarCamposManuais() {
+  const d = window._dispositivoAtual;
+  const container = document.getElementById('manual-campos');
+  window._dadosOriginaisManual = {};
+  container.innerHTML = camposEditaveis.map(([campo, rotulo]) => `
+    <div class="col-md-6">
+      <label class="form-label" for="manual-${campo}">${rotulo}</label>
+      ${campo === 'descricao'
+        ? `<textarea class="form-control" id="manual-${campo}" rows="2"></textarea>`
+        : `<input class="form-control" id="manual-${campo}" type="text">`}
+    </div>`).join('');
+  camposEditaveis.forEach(([campo]) => {
+    const valor = d[campo] === '—' ? '' : (d[campo] ?? '');
+    window._dadosOriginaisManual[campo] = String(valor);
+    document.getElementById(`manual-${campo}`).value = valor;
+  });
+  document.getElementById('detalhes-view').style.display = 'none';
+  document.getElementById('manual-view').style.display = 'block';
+}
+
+function cancelarEdicaoManual() {
+  document.getElementById('manual-view').style.display = 'none';
+  document.getElementById('detalhes-view').style.display = 'block';
+}
+
+async function salvarEdicaoManual() {
+  const d = window._dispositivoAtual;
+  const payload = {};
+  camposEditaveis.forEach(([campo]) => {
+    const valor = document.getElementById(`manual-${campo}`).value.trim();
+    if (valor !== window._dadosOriginaisManual[campo]) payload[campo] = valor;
+  });
+  if (!Object.keys(payload).length) {
+    cancelarEdicaoManual();
+    mostrarToast('Nenhuma alteração foi feita.', 'bg-info');
+    return;
+  }
+  const resposta = await fetch(`/api/dispositivos/${d.id}/manual`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const resultado = await resposta.json();
+  if (!resposta.ok) {
+    mostrarToast(resultado.erro || 'Não foi possível salvar os dados.', 'bg-danger');
+    return;
+  }
+  window._dispositivoAtual = resultado;
+  carregarDispositivos();
+  abrirModal(resultado);
+  mostrarToast('Cadastro atualizado. Os campos manuais serão preservados nas próximas varreduras.');
 }
 
 // ── Tabela de dispositivos ─────────────────────────────
@@ -408,17 +491,17 @@ async function carregarDispositivos() {
 
     tbody.innerHTML += `
       <tr style="cursor:pointer" onclick="abrirModal(window._dispositivos[${idx}])">
-        <td><code>${d.ip}</code></td>
-        <td><strong>${d.hostname}</strong></td>
-        <td><span class="badge bg-light text-dark border">${d.tipo}</span></td>
+        <td><code>${escaparHtml(d.ip)}</code></td>
+        <td><strong>${escaparHtml(d.hostname)}</strong></td>
+        <td><span class="badge bg-light text-dark border">${escaparHtml(d.tipo)}</span></td>
         <td>${badge}</td>
-        <td><small>${d.modelo}</small></td>
-        <td><small>${d.sistema_op}</small></td>
-        <td><small>${d.processador}</small></td>
-        <td><small>${d.mac_address}</small></td>
-        <td><small>${d.serial_number}</small></td>
-        <td><small>${d.memoria}</small></td>
-        <td><small>${d.armazenamento}</small></td>
+        <td><small>${escaparHtml(d.modelo)}</small></td>
+        <td><small>${escaparHtml(d.sistema_op)}</small></td>
+        <td><small>${escaparHtml(d.processador)}</small></td>
+        <td><small>${escaparHtml(d.mac_address)}</small></td>
+        <td><small>${escaparHtml(d.serial_number)}</small></td>
+        <td><small>${escaparHtml(d.memoria)}</small></td>
+        <td><small>${escaparHtml(d.armazenamento)}</small></td>
         <td>${badgeLicenca(d)}</td>
         <td>${d.uptime}</td>
         <td><small class="text-muted">${d.ultima_vez}</small></td>

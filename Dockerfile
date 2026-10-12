@@ -7,6 +7,7 @@ ENV TZ=America/Sao_Paulo
 RUN apt-get update && apt-get install -y \
     libsnmp-dev \
     snmp \
+    iputils-ping \
     nmap \
     gcc \
     tzdata \
