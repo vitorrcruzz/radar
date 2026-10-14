@@ -311,6 +311,8 @@ function abrirModal(d) {
           <table class="table table-sm table-borderless mb-0">
             <tr><td style="width:45%;${tm}">IP</td>
                 <td><code style="${t?'color:#4fc3f7;background:rgba(79,195,247,.1);padding:.1rem .3rem;border-radius:.3rem':''}">${escaparHtml(d.ip)}</code></td></tr>
+            <tr><td style="${tm}">Rede</td>
+                <td style="${tc}"><span class="badge bg-info text-dark">${escaparHtml(d.rede)}</span></td></tr>
             <tr><td style="${tm}">Hostname</td>
                 <td style="${tc}"><strong>${escaparHtml(d.hostname)}</strong></td></tr>
             <tr><td style="${tm}">Interfaces</td>
@@ -492,6 +494,7 @@ async function carregarDispositivos() {
     tbody.innerHTML += `
       <tr style="cursor:pointer" onclick="abrirModal(window._dispositivos[${idx}])">
         <td><code>${escaparHtml(d.ip)}</code></td>
+        <td><span class="badge bg-info text-dark">${escaparHtml(d.rede)}</span></td>
         <td><strong>${escaparHtml(d.hostname)}</strong></td>
         <td><span class="badge bg-light text-dark border">${escaparHtml(d.tipo)}</span></td>
         <td>${badge}</td>
@@ -511,7 +514,7 @@ async function carregarDispositivos() {
   tabelaDispositivos = new DataTable('#tabela-dispositivos', {
     language: { url: 'https://cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json' },
     pageLength: 15,
-    order: [[3, 'desc']],
+    order: [[4, 'desc']],
     scrollX: true,
     initComplete: function() {
       corrigirEstilosDataTables();

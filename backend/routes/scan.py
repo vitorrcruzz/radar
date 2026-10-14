@@ -7,6 +7,7 @@ from flask import Blueprint, jsonify
 from backend.auth import perfil_requerido
 from backend.database import db
 from backend.models import Agente, Dispositivo, HistoricoVarredura
+from backend.network_labels import identificar_rede
 
 scan_bp = Blueprint("scan", __name__)
 
@@ -14,7 +15,7 @@ def executar_varredura(app, disparado_por: str = "automatico"):
     from collector.snmp_scanner import escanear_rede
     from collector.wmi_collector import coletar_dados_windows, credenciais_configuradas
 
-    rede      = os.getenv("SCAN_NETWORK",   "192.168.0.0/24")
+    rede      = os.getenv("SCAN_NETWORK",   "192.168.1.0/24")
     community = os.getenv("SCAN_COMMUNITY", "radar-lab-leitura-2026")
     sub_rede  = ipaddress.ip_network(rede, strict=False)
 
@@ -33,15 +34,26 @@ def executar_varredura(app, disparado_por: str = "automatico"):
             for agente in Agente.query.filter_by(ativo=True).all()
         }
         for dispositivo in Dispositivo.query.all():
+            etiqueta_rede = identificar_rede(dispositivo.ip)
+            if etiqueta_rede:
+                dispositivo.rede = etiqueta_rede
+            agente = agentes_por_dispositivo.get(dispositivo.id)
+            if agente:
+                limite = int(os.getenv("AGENT_OFFLINE_AFTER_SECONDS", "900"))
+                idade = (
+                    (datetime.now() - agente.ultima_coleta).total_seconds()
+                    if agente.ultima_coleta else limite + 1
+                )
+                if idade > limite:
+                    dispositivo.status = "offline"
+                elif dispositivo.status != "offline":
+                    dispositivo.status = "online"
+                # Agentes podem estar em outra rede autorizada (ex.: 9º andar),
+                # fora da sub-rede que o scanner percorre.
+                continue
             try:
                 if ipaddress.ip_address(dispositivo.ip) in sub_rede:
-                    agente = agentes_por_dispositivo.get(dispositivo.id)
-                    if agente is None:
-                        dispositivo.status = "offline"
-                    elif agente.ultima_coleta:
-                        limite = int(os.getenv("AGENT_OFFLINE_AFTER_SECONDS", "900"))
-                        idade = (datetime.now() - agente.ultima_coleta).total_seconds()
-                        dispositivo.status = "offline" if idade > limite else "online"
+                    dispositivo.status = "offline"
             except ValueError:
                 continue
 
@@ -120,15 +132,17 @@ def executar_varredura(app, disparado_por: str = "automatico"):
             if dispositivo is None:
                 dispositivo = Dispositivo(ip=ip)
                 db.session.add(dispositivo)
-            else:
-                agente = agentes_por_dispositivo.get(dispositivo.id)
-                if agente and agente.ultima_coleta:
-                    limite = int(os.getenv("AGENT_OFFLINE_AFTER_SECONDS", "900"))
-                    idade = (datetime.now() - agente.ultima_coleta).total_seconds()
-                    if idade <= limite:
-                        # A coleta local recente é a fonte principal do computador;
-                        # SNMP não deve substituir dados mais completos do agente.
-                        continue
+            etiqueta_rede = identificar_rede(ip)
+            if etiqueta_rede:
+                dispositivo.rede = etiqueta_rede
+            agente = agentes_por_dispositivo.get(dispositivo.id)
+            if agente and agente.ultima_coleta:
+                limite = int(os.getenv("AGENT_OFFLINE_AFTER_SECONDS", "900"))
+                idade = (datetime.now() - agente.ultima_coleta).total_seconds()
+                if idade <= limite:
+                    # A coleta local recente é a fonte principal do computador;
+                    # SNMP não deve substituir dados mais completos do agente.
+                    continue
 
             if res["status"] == "online":
                 total_online += 1

@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import ipaddress
 import json
+import logging
 import os
 import secrets
 import uuid
@@ -13,8 +14,10 @@ from flask import Blueprint, jsonify, request
 
 from backend.database import db
 from backend.models import Agente, ColetaAgente, Dispositivo
+from backend.network_labels import identificar_rede
 
 agents_bp = Blueprint("agents", __name__)
+logger = logging.getLogger(__name__)
 
 LIMITES = {
     "hostname": 100,
@@ -33,6 +36,48 @@ LIMITES = {
 
 def _hash_token(token):
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _redes_agente_autorizadas():
+    """Retorna as sub-redes autorizadas para agentes."""
+    configuracao = (
+        os.getenv("RADAR_AGENT_ALLOWED_NETWORKS")
+        or os.getenv("SCAN_NETWORK", "")
+    )
+    if not configuracao.strip():
+        return []
+    try:
+        return [
+            ipaddress.ip_network(item.strip(), strict=False)
+            for item in configuracao.replace(";", ",").split(",")
+            if item.strip()
+        ]
+    except ValueError:
+        logger.error("RADAR_AGENT_ALLOWED_NETWORKS contém uma sub-rede inválida.")
+        return []
+
+
+def _ip_em_rede_agente_autorizada(endereco):
+    try:
+        ip = ipaddress.ip_address(str(endereco or "").strip())
+        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+            ip = ip.ipv4_mapped
+    except ValueError:
+        return False
+    return any(ip.version == rede.version and ip in rede for rede in _redes_agente_autorizadas())
+
+
+def _origem_agente_autorizada():
+    """Aceita conexões de agentes apenas das redes explicitamente autorizadas."""
+    origem = request.remote_addr
+    try:
+        endereco = ipaddress.ip_address(origem or "")
+        if isinstance(endereco, ipaddress.IPv6Address) and endereco.ipv4_mapped:
+            endereco = endereco.ipv4_mapped
+    except ValueError:
+        return False
+
+    return any(endereco.version == rede.version and endereco in rede for rede in _redes_agente_autorizadas())
 
 
 def _token_bearer():
@@ -95,6 +140,11 @@ def _aplicar_coleta(agente, coleta):
         raise ValueError("O endereço IP informado já está associado a outro dispositivo.")
 
     dispositivo.ip = dados["ip"]
+    # A etiqueta segue o IP local informado pelo agente. O IP de origem HTTP
+    # pode ser de um roteador/NAT entre o equipamento e o servidor.
+    etiqueta_rede = identificar_rede(dados["ip"])
+    if etiqueta_rede:
+        dispositivo.rede = etiqueta_rede
     dispositivo.status = "online"
     dispositivo.ultima_vez = datetime.now()
     dispositivo.interfaces = dados.get("interfaces", 0)
@@ -118,6 +168,10 @@ def _aplicar_coleta(agente, coleta):
 
 @agents_bp.route("/agentes/registrar", methods=["POST"])
 def registrar_agente():
+    if not _origem_agente_autorizada():
+        logger.warning("Registro de agente recusado; origem fora das redes permitidas: %s", request.remote_addr)
+        return jsonify({"erro": "Agentes só podem se conectar pelas redes autorizadas."}), 403
+
     segredo = os.getenv("RADAR_AGENT_ENROLLMENT_TOKEN", "")
     recebido = _token_bearer()
     if not segredo or not recebido or not hmac.compare_digest(segredo, recebido):
@@ -126,6 +180,12 @@ def registrar_agente():
     coleta, erro = _validar_payload(request.get_json(silent=True))
     if erro:
         return jsonify({"erro": erro}), 400
+    if not _ip_em_rede_agente_autorizada(coleta["dados"]["ip"]):
+        logger.warning(
+            "Registro de agente recusado; IP informado fora das redes permitidas: %s",
+            coleta["dados"]["ip"],
+        )
+        return jsonify({"erro": "O IP do equipamento não pertence às redes autorizadas."}), 403
 
     agente = db.session.get(Agente, coleta["agent_id"])
     if agente is None:
@@ -173,12 +233,35 @@ def receber_inventario():
     agente = Agente.query.filter_by(token_hash=_hash_token(token)).first()
     if agente is None or not agente.ativo or not hmac.compare_digest(agente.token_hash, _hash_token(token)):
         return jsonify({"erro": "Token do agente inválido ou revogado."}), 401
+    if not _origem_agente_autorizada():
+        logger.warning("Coleta de agente recusada; origem fora das redes permitidas: %s", request.remote_addr)
+        agente.dispositivo.status = "offline"
+        agente.dispositivo.rede = None
+        db.session.commit()
+        return jsonify({"erro": "Agentes só podem se conectar pelas redes autorizadas."}), 403
 
     coleta, erro = _validar_payload(request.get_json(silent=True))
     if erro:
         return jsonify({"erro": erro}), 400
     if coleta["agent_id"] != agente.id:
         return jsonify({"erro": "agent_id não corresponde ao token autenticado."}), 403
+
+    if not _ip_em_rede_agente_autorizada(coleta["dados"]["ip"]):
+        logger.warning(
+            "Coleta de agente recusada; IP informado fora das redes permitidas: origem=%s ip_informado=%s",
+            request.remote_addr,
+            coleta["dados"]["ip"],
+        )
+        agente.dispositivo.status = "offline"
+        agente.dispositivo.rede = None
+        db.session.commit()
+        return jsonify({"erro": "O IP do equipamento não pertence às redes autorizadas."}), 403
+
+    logger.info(
+        "Coleta de agente aceita: origem=%s ip_informado=%s",
+        request.remote_addr,
+        coleta["dados"]["ip"],
+    )
 
     try:
         _aplicar_coleta(agente, coleta)

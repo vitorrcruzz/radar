@@ -70,9 +70,15 @@ python -m backend.create_user --nome "Administrador" --email admin@exemplo.local
 
 Abra `http://localhost:5000` e entre com essa conta. Para acesso pela rede, use o IP do servidor no lugar de `localhost`. Crie contas adicionais pelo mesmo comando, usando `--perfil usuario` para acesso de consulta e exportação. Administradores podem iniciar varreduras e editar dados manuais. O HTTPS pode ser ativado com os caminhos de certificado descritos abaixo; sem HTTPS, mantenha o uso restrito ao laboratório.
 
-## Simulação com Docker
+## Execução com Docker Compose em rede real
 
-Docker Compose continua disponível para simular dispositivos SNMP. Copie `.env.example` para `.env`, deixe `SCAN_NETWORK` apontando para `172.20.0.0/24` e inicie com `docker compose up -d --build`. Acesse `http://localhost:5000` e use **Escanear Agora**.
+O Compose inicia somente a aplicação RADAR; os simuladores SNMP não fazem parte da execução. Copie `.env.example` para `.env`, configure `SCAN_NETWORK` com uma sub-rede autorizada e defina `SCAN_COMMUNITY` conforme os equipamentos que serão consultados. Inicie com:
+
+```bash
+docker compose up -d --build
+```
+
+Acesse `http://localhost:5000` e use **Escanear Agora** somente após confirmar que a sub-rede está autorizada e que o servidor tem rota até ela. Para o piloto atual, a sub-rede configurada localmente é `192.168.1.0/24`.
 
 ### Agente de coleta e instalação como serviço
 
@@ -99,7 +105,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\install-agent-windows.ps1 -ServerUrl "http://IP-DO-SERVIDOR:5000" -AllowInsecureHttp
 ```
 
-Para HTTPS com CA interna confiável, omita `-AllowInsecureHttp` e informe `-CaBundle "C:\caminho\empresa-ca.pem"`. O script pedirá o token inicial de registro sem exibi-lo, instalará as dependências em um ambiente virtual separado e criará a tarefa `RADAR Agent`. O arquivo de estado e o log ficam em `%ProgramData%\RADAR`; acesso limitado a `SYSTEM` e Administradores. Para verificar a tarefa, use `Get-ScheduledTask -TaskName 'RADAR Agent'`; o log pode ser lido com `Get-Content "$env:ProgramData\RADAR\agent.log" -Wait`.
+Para HTTPS com CA interna confiável, omita `-AllowInsecureHttp` e informe `-CaBundle "C:\caminho\empresa-ca.pem"`. O script pedirá o token inicial de registro sem exibi-lo, instalará as dependências em um ambiente virtual separado e criará a tarefa `RADAR Agent`. Se não encontrar Python 3.10 ou superior, tentará instalar Python 3.12 x64 para todos os usuários via WinGet (`Python.Python.3.12`); essa etapa requer PowerShell elevado e acesso às fontes WinGet e PyPI. Se WinGet não estiver disponível ou for bloqueado pela política da empresa, instale uma versão aprovada de Python manualmente e informe o executável com `-PythonPath`. O arquivo de estado e o log ficam em `%ProgramData%\RADAR`; acesso limitado a `SYSTEM` e Administradores. Para verificar a tarefa, use `Get-ScheduledTask -TaskName 'RADAR Agent'`; o log pode ser lido com `Get-Content "$env:ProgramData\RADAR\agent.log" -Wait`.
 
 No Linux com systemd, execute como root (por exemplo, com `sudo`). O serviço roda sob a conta interna `root` para ler os identificadores de hardware locais; não cria outro usuário nem guarda senha. Para HTTPS:
 
@@ -111,9 +117,9 @@ Em laboratório doméstico sem HTTPS, acrescente `--allow-insecure-http`. O toke
 
 No modo manual, o estado do agente fica em `~/.radar/agent.json` (ou no caminho informado por `--state-file`/`RADAR_AGENT_STATE`) e contém o token individual desse computador. Proteja esse arquivo; não o envie ao GitHub nem o compartilhe. Os instaladores pedem elevação local porque configuram uma tarefa ou serviço e protegem o arquivo de estado. O uso de HTTP é permitido **somente para laboratório isolado**. Não instale agentes na rede empresarial até a equipe aprovar o procedimento e o servidor HTTPS com certificado confiável estar disponível.
 
-O arquivo `.env` é ignorado pelo Git. A configuração atual aceita uma sub-rede e uma community v1/v2c; suporte a várias sub-redes e perfis SNMP v3 ainda será implementado. A varredura consulta SNMP e tenta ping na faixa autorizada. Hosts que respondem somente ao ping aparecem como **Host sem coleta** até o agente ser instalado; ICMP bloqueado pode esconder hosts, então peça também à equipe de rede uma lista DHCP quando disponível. Para SNMP, o servidor precisa de rota até a rede e os equipamentos/firewalls devem permitir UDP 161. Para habilitar TLS direto no servidor, forneça certificado e chave PEM em `certs/` (não versionada) e preencha `RADAR_TLS_CERT_FILE=/app/certs/server.crt` e `RADAR_TLS_KEY_FILE=/app/certs/server.key` no `.env`; os computadores clientes precisam confiar na CA que emitiu o certificado. Para TLS em proxy reverso, configure `RADAR_COOKIE_SECURE=true` para o navegador enviar o cookie de sessão somente por HTTPS. Se a rede da empresa se sobrepuser à rede Docker `172.20.0.0/24`, será necessário ajustar a rede do Compose antes de iniciar.
+O arquivo `.env` é ignorado pelo Git. A configuração atual aceita uma sub-rede e uma community v1/v2c; suporte a várias sub-redes e perfis SNMP v3 ainda será implementado. A varredura consulta SNMP e tenta ping na faixa autorizada. Hosts que respondem somente ao ping aparecem como **Host sem coleta** até o agente ser instalado; ICMP bloqueado pode esconder hosts, então peça também à equipe de rede uma lista DHCP quando disponível. Para SNMP, o servidor precisa de rota até a rede e os equipamentos/firewalls devem permitir UDP 161. Para habilitar TLS direto no servidor, forneça certificado e chave PEM no diretório local de certificados, ignorado pelo Git. O Compose monta `./certs` por padrão; use `RADAR_CERTS_DIR` no `.env` para escolher outro diretório do host. Configure `RADAR_TLS_CERT_FILE=/app/certs/server.crt` e `RADAR_TLS_KEY_FILE=/app/certs/server.key`; os computadores clientes precisam confiar na CA emissora. Para TLS em proxy reverso, configure `RADAR_COOKIE_SECURE=true` para o navegador enviar o cookie de sessão somente por HTTPS.
 
-Para voltar ao cenário simulado padrão, remova ou renomeie `.env`; o Compose usará `172.20.0.0/24` e `public`.
+O Compose exige `SCAN_NETWORK` no `.env` e não possui uma sub-rede simulada padrão. Os arquivos históricos de resposta SNMP em `snmp-data/` não são montados nem usados pela execução atual.
 
 ## Segurança
 

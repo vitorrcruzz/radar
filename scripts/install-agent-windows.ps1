@@ -7,7 +7,7 @@ param(
     [string]$PythonPath,
     [string]$CaBundle,
     [ValidateRange(60, 86400)]
-    [int]$IntervalSeconds = 900,
+    [int]$IntervalSeconds = 60,
     [switch]$AllowInsecureHttp
 )
 
@@ -20,21 +20,173 @@ $stateFile = Join-Path $stateRoot 'agent.json'
 $logFile = Join-Path $stateRoot 'agent.log'
 $venvPython = Join-Path $installRoot 'venv\Scripts\python.exe'
 
-if (-not $PythonPath) {
-    $python = Get-Command python.exe -ErrorAction SilentlyContinue
-    if (-not $python) { throw 'Python não encontrado. Instale Python 3.10+ ou informe -PythonPath.' }
-    $PythonPath = $python.Source
+function Invoke-NativeCaptured {
+    param(
+        [Parameter(Mandatory = $true)] [string]$FilePath,
+        [Parameter(Mandatory = $true)] [string[]]$Arguments
+    )
+
+    $previousPreference = $ErrorActionPreference
+    try {
+        # Windows PowerShell can turn native stderr into a terminating error
+        # when ErrorActionPreference is Stop. Capture it without aborting the
+        # installer (e.g. py.exe reports this when no runtime is installed).
+        $ErrorActionPreference = 'Continue'
+        $output = @(& $FilePath @Arguments 2>$null)
+        $exitCode = $LASTEXITCODE
+    }
+    catch {
+        $output = @()
+        $exitCode = 1
+    }
+    finally {
+        $ErrorActionPreference = $previousPreference
+    }
+
+    return [pscustomobject]@{ Output = $output; ExitCode = $exitCode }
 }
-if (-not (Test-Path -LiteralPath $PythonPath -PathType Leaf)) { throw "Executável Python não encontrado: $PythonPath" }
+
+function Resolve-CompatiblePython {
+    param([string]$RequestedPath)
+
+    $candidates = [System.Collections.Generic.List[string]]::new()
+    if ($RequestedPath) {
+        # An explicit path is supplied by the administrator. Validate that
+        # it exists, then let `python -m venv` perform the real execution
+        # check. This avoids false negatives from native stdout handling in
+        # Windows PowerShell 5.1 when Python's version probe is captured.
+        if (Test-Path -LiteralPath $RequestedPath -PathType Leaf) {
+            return (Resolve-Path -LiteralPath $RequestedPath).Path
+        }
+        return $null
+    }
+    else {
+        foreach ($commandName in @('python.exe')) {
+            Get-Command $commandName -All -ErrorAction SilentlyContinue |
+                ForEach-Object { if ($_.Source) { $candidates.Add($_.Source) } }
+        }
+
+        $pathValues = @(
+            [Environment]::GetEnvironmentVariable('Path', 'Machine'),
+            [Environment]::GetEnvironmentVariable('Path', 'User'),
+            $env:Path
+        )
+        foreach ($directory in (($pathValues -join ';') -split ';' | Select-Object -Unique)) {
+            $directory = $directory.Trim().Trim('"')
+            if ($directory) {
+                $candidates.Add((Join-Path $directory 'python.exe'))
+            }
+        }
+
+        if ($env:ProgramFiles) {
+            $candidates.Add((Join-Path $env:ProgramFiles 'Python312\python.exe'))
+            $candidates.Add((Join-Path $env:ProgramFiles 'Python 3.12\python.exe'))
+        }
+        # WinGet can install Python successfully but leave the current
+        # PowerShell process with a stale PATH. Look up registered CPython
+        # installs directly instead of relying only on PATH/py.exe.
+        foreach ($registryPath in @(
+            'HKLM:\SOFTWARE\Python\PythonCore',
+            'HKLM:\SOFTWARE\WOW6432Node\Python\PythonCore',
+            'HKCU:\SOFTWARE\Python\PythonCore'
+        )) {
+            if (Test-Path -LiteralPath $registryPath) {
+                Get-ChildItem -LiteralPath $registryPath -ErrorAction SilentlyContinue |
+                    ForEach-Object {
+                        $installKey = Join-Path $_.PSPath 'InstallPath'
+                        if (Test-Path -LiteralPath $installKey) {
+                            $registeredDir = (Get-Item -LiteralPath $installKey).GetValue('')
+                            if ($registeredDir) {
+                                $candidates.Add((Join-Path $registeredDir 'python.exe'))
+                            }
+                        }
+                    }
+            }
+        }
+        if ($env:LocalAppData) {
+            $userPythonRoot = Join-Path $env:LocalAppData 'Programs\Python'
+            if (Test-Path -LiteralPath $userPythonRoot -PathType Container) {
+                Get-ChildItem -LiteralPath $userPythonRoot -Directory -ErrorAction SilentlyContinue |
+                    ForEach-Object { $candidates.Add((Join-Path $_.FullName 'python.exe')) }
+            }
+        }
+
+        $launcher = Get-Command py.exe -ErrorAction SilentlyContinue
+        if ($launcher) {
+            foreach ($minorVersion in @('3.12', '3.11', '3.10')) {
+                $probe = Invoke-NativeCaptured -FilePath $launcher.Source -Arguments @(
+                    "-$minorVersion", '-c', 'import sys; print(sys.executable)'
+                )
+                if ($probe.ExitCode -eq 0 -and $probe.Output) {
+                    $candidates.Add(($probe.Output | Select-Object -First 1).ToString().Trim())
+                }
+            }
+        }
+    }
+
+    foreach ($candidate in ($candidates | Where-Object { $_ } | Select-Object -Unique)) {
+        if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) { continue }
+        try {
+            # Invoke the interpreter directly for this check. The generic
+            # native-output wrapper can represent stdout differently across
+            # Windows PowerShell 5.1 and PowerShell 7, causing a valid Python
+            # executable to be rejected even though --version works.
+            $versionOutput = @(& $candidate -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>&1)
+            $pythonExitCode = $LASTEXITCODE
+            if ($pythonExitCode -ne 0 -or -not $versionOutput) { continue }
+            $versionText = ($versionOutput | Select-Object -First 1).ToString().Trim()
+            $version = [version]$versionText
+            if ($version -ge [version]'3.10') {
+                return (Resolve-Path -LiteralPath $candidate).Path
+            }
+        }
+        catch {
+            continue
+        }
+    }
+    return $null
+}
+
+$resolvedPython = Resolve-CompatiblePython -RequestedPath $PythonPath
+if (-not $resolvedPython -and $PythonPath) {
+    throw "PythonPath nao aponta para um Python 3.10 ou superior valido: $PythonPath"
+}
+
+if (-not $resolvedPython) {
+    $winget = Get-Command winget.exe -ErrorAction SilentlyContinue
+    if (-not $winget) {
+        throw 'Python 3.10+ nao encontrado e winget nao esta disponivel. Instale Python 3.12 x64 aprovado pela empresa ou informe o caminho com -PythonPath.'
+    }
+
+    Write-Host 'Python 3.10+ nao encontrado. Instalando Python 3.12 x64 para todos os usuarios via winget...'
+    $installResult = Invoke-NativeCaptured -FilePath $winget.Source -Arguments @(
+        'install', '--id', 'Python.Python.3.12', '--exact', '--source', 'winget',
+        '--scope', 'machine', '--architecture', 'x64', '--silent',
+        '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity'
+    )
+    $wingetExitCode = $installResult.ExitCode
+    $resolvedPython = Resolve-CompatiblePython
+    if (-not $resolvedPython) {
+        if ($installResult.Output) {
+            Write-Host 'Saída do WinGet:'
+            $installResult.Output | ForEach-Object { Write-Host $_ }
+        }
+        throw "O WinGet terminou com codigo $wingetExitCode, mas o instalador nao localizou um Python 3.10+. Feche e reabra o PowerShell e tente novamente; se persistir, informe o caminho completo de python.exe com -PythonPath."
+    }
+}
+$PythonPath = $resolvedPython
+Write-Host "Python selecionado: $PythonPath"
+
 if (-not (Test-Path (Join-Path $ProjectPath 'agent\client.py')) -or
-    -not (Test-Path (Join-Path $ProjectPath 'collector\host_inventory.py'))) {
-    throw "ProjectPath não aponta para a raiz do repositório RADAR: $ProjectPath"
+    -not (Test-Path (Join-Path $ProjectPath 'collector\host_inventory.py')) -or
+    -not (Test-Path (Join-Path $ProjectPath 'agent-requirements.txt'))) {
+    throw "ProjectPath nao aponta para a raiz do repositorio RADAR: $ProjectPath"
 }
 if ($ServerUrl -notmatch '^https://') {
     if (-not $AllowInsecureHttp -or $ServerUrl -notmatch '^http://') {
         throw 'Use HTTPS. HTTP somente é aceito no laboratório com -AllowInsecureHttp.'
     }
-    Write-Warning 'HTTP está sem criptografia. Use esta opção somente no laboratório doméstico isolado.'
+    Write-Warning 'HTTP esta sem criptografia. Use esta opçao somente no laboratorio domestico isolado.'
 }
 
 New-Item -ItemType Directory -Force -Path $installRoot, $sourceRoot, $stateRoot | Out-Null
@@ -95,9 +247,9 @@ $settings = New-ScheduledTaskSettingsSet `
     -DontStopIfGoingOnBatteries
 
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger `
-    -Principal $principal -Settings $settings -Description 'Coleta local de inventário pelo RADAR.' -Force | Out-Null
+    -Principal $principal -Settings $settings -Description 'Coleta local de inventario pelo RADAR.' -Force | Out-Null
 Start-ScheduledTask -TaskName $taskName
 Write-Host "Agente instalado e iniciado. Tarefa: $taskName"
 Write-Host "Estado protegido: $stateFile"
 Write-Host "Log: $logFile"
-Write-Host 'A tarefa executa como SYSTEM; nenhuma senha de usuário é armazenada.'
+Write-Host 'A tarefa executa como SYSTEM; nenhuma senha de usuario e armazenada.'

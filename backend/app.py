@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, request, session, url_for
 from apscheduler.schedulers.background import BackgroundScheduler
 from backend.database import db
+from sqlalchemy import inspect, text
 
 load_dotenv(PROJECT_ROOT / ".env")
 
@@ -66,6 +67,12 @@ def criar_app():
 
     with app.app_context():
         db.create_all()
+        colunas_dispositivo = {
+            coluna["name"] for coluna in inspect(db.engine).get_columns("dispositivos")
+        }
+        if "rede" not in colunas_dispositivo:
+            with db.engine.begin() as conexao:
+                conexao.execute(text("ALTER TABLE dispositivos ADD COLUMN rede VARCHAR(100)"))
         # from backend.seed import popular_dispositivos_offline
         # popular_dispositivos_offline()
 

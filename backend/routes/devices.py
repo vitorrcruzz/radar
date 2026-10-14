@@ -1,8 +1,9 @@
 from datetime import datetime
+import os
 from flask import Blueprint, jsonify, request
 from backend.database import db
 from backend.auth import perfil_requerido
-from backend.models import CampoManualDispositivo, Dispositivo, HistoricoVarredura
+from backend.models import Agente, CampoManualDispositivo, Dispositivo, HistoricoVarredura
 
 devices_bp = Blueprint("devices", __name__)
 
@@ -21,8 +22,29 @@ LIMITES_CAMPOS_MANUAIS = {
     "contato": 200,
 }
 
+
+def _atualizar_status_agentes():
+    """Expira status de agente sem esperar a próxima varredura de rede."""
+    limite = max(60, int(os.getenv("AGENT_OFFLINE_AFTER_SECONDS", "120")))
+    agora = datetime.now()
+    alterado = False
+    for agente in Agente.query.all():
+        dispositivo = agente.dispositivo
+        idade = (
+            (agora - agente.ultima_coleta).total_seconds()
+            if agente.ultima_coleta else limite + 1
+        )
+        expirado = not agente.ativo or idade > limite
+        if expirado and dispositivo.status == "online":
+            dispositivo.status = "offline"
+            alterado = True
+    if alterado:
+        db.session.commit()
+
+
 @devices_bp.route("/dispositivos")
 def listar_dispositivos():
+    _atualizar_status_agentes()
     tipo   = request.args.get("tipo")
     status = request.args.get("status")
     query  = Dispositivo.query
@@ -35,6 +57,7 @@ def listar_dispositivos():
 
 @devices_bp.route("/dispositivos/<int:device_id>")
 def detalhar_dispositivo(device_id):
+    _atualizar_status_agentes()
     d = Dispositivo.query.get_or_404(device_id)
     return jsonify(d.to_dict())
 
@@ -75,6 +98,7 @@ def atualizar_campos_manuais(device_id):
 
 @devices_bp.route("/stats")
 def estatisticas():
+    _atualizar_status_agentes()
     total   = Dispositivo.query.count()
     online  = Dispositivo.query.filter_by(status="online").count()
     offline = Dispositivo.query.filter_by(status="offline").count()

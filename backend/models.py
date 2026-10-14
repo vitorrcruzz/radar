@@ -36,6 +36,7 @@ class Dispositivo(db.Model):
     serial_number    = db.Column(db.String(50))
     descricao        = db.Column(db.Text)
     localizacao      = db.Column(db.String(200))
+    rede             = db.Column(db.String(100))
     contato          = db.Column(db.String(200))
     interfaces       = db.Column(db.Integer)
     uptime           = db.Column(db.String(50))
@@ -85,6 +86,7 @@ class Dispositivo(db.Model):
             "serial_number":    self.serial_number     or "—",
             "descricao":        self.descricao        or "—",
             "localizacao":      self.localizacao      or "—",
+            "rede":             self.rede             or "—",
             "contato":          self.contato          or "—",
             "interfaces":       self.interfaces,
             "uptime":           self.uptime           or "—",
