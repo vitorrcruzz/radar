@@ -6,9 +6,10 @@ import ipaddress
 import json
 import logging
 import os
+import re
 import secrets
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from flask import Blueprint, jsonify, request
 
@@ -31,6 +32,8 @@ LIMITES = {
     "serial_number": 50,
     "descricao": 1000,
     "uptime_fmt": 50,
+    "edicao_windows": 100,
+    "status_ativacao_windows": 60,
 }
 
 
@@ -123,6 +126,16 @@ def _validar_payload(payload):
     except (TypeError, ValueError):
         normalizados["interfaces"] = 0
 
+    if "licenca_windows_expira" in dados:
+        data_expiracao = dados.get("licenca_windows_expira")
+        if data_expiracao:
+            try:
+                normalizados["licenca_windows_expira"] = date.fromisoformat(str(data_expiracao)).isoformat()
+            except ValueError:
+                return None, "licenca_windows_expira deve estar no formato AAAA-MM-DD."
+        else:
+            normalizados["licenca_windows_expira"] = None
+
     plataforma = str(payload.get("plataforma", ""))[:40].strip()
     if not plataforma:
         return None, "O campo plataforma é obrigatório."
@@ -157,6 +170,20 @@ def _aplicar_coleta(agente, coleta):
         # Uma coleta parcial não deve apagar dados úteis já registrados.
         if valor:
             setattr(dispositivo, atributo, valor)
+
+    if coleta["plataforma"].lower().startswith("win"):
+        # A data é atualizada inclusive para None: WMI pode informar que não há prazo.
+        if "licenca_windows_expira" in dados:
+            dispositivo.licenca_windows_expira = (
+                date.fromisoformat(dados["licenca_windows_expira"])
+                if dados["licenca_windows_expira"] else None
+            )
+
+    if not dados.get("edicao_windows") and coleta["plataforma"].lower().startswith("win"):
+        sistema_op = str(dados.get("sistema_op") or "").strip()
+        edicao_windows = re.sub(r"\s*\(build\s+[^)]*\)\s*$", "", sistema_op, flags=re.IGNORECASE)
+        if edicao_windows.lower().startswith("windows"):
+            dispositivo.edicao_windows = edicao_windows[:100]
 
     agente.plataforma = coleta["plataforma"]
     agente.ultima_coleta = datetime.now()

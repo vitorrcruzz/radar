@@ -73,6 +73,19 @@ def criar_app():
         if "rede" not in colunas_dispositivo:
             with db.engine.begin() as conexao:
                 conexao.execute(text("ALTER TABLE dispositivos ADD COLUMN rede VARCHAR(100)"))
+        novas_colunas = {
+            "edicao_windows": "VARCHAR(100)",
+            "status_ativacao_windows": "VARCHAR(60)",
+            "licenca_windows_expira": "DATE",
+        }
+        faltantes = {
+            nome: tipo for nome, tipo in novas_colunas.items()
+            if nome not in colunas_dispositivo
+        }
+        if faltantes:
+            with db.engine.begin() as conexao:
+                for nome, tipo in faltantes.items():
+                    conexao.execute(text(f"ALTER TABLE dispositivos ADD COLUMN {nome} {tipo}"))
         # from backend.seed import popular_dispositivos_offline
         # popular_dispositivos_offline()
 

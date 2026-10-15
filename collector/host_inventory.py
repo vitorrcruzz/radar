@@ -4,6 +4,7 @@ import platform
 import re
 import socket
 import time
+from datetime import datetime
 from pathlib import Path
 
 import psutil
@@ -18,6 +19,24 @@ def _ler_texto(caminho):
 
 def _formatar_gib(bytes_total):
     return f"{bytes_total / (1024 ** 3):.2f} GiB"
+
+
+def _data_wmi_para_iso(valor):
+    """Converte EvaluationEndDate WMI (DMTF) para YYYY-MM-DD, se definida."""
+    if not valor:
+        return None
+    if all(hasattr(valor, campo) for campo in ("year", "month", "day")):
+        try:
+            return valor.date().isoformat()
+        except (AttributeError, ValueError):
+            pass
+    texto = str(valor).strip()
+    if len(texto) >= 14 and texto[:14].isdigit():
+        try:
+            return datetime.strptime(texto[:14], "%Y%m%d%H%M%S").date().isoformat()
+        except ValueError:
+            return None
+    return None
 
 
 def _dados_windows():
@@ -39,6 +58,15 @@ def _dados_windows():
         computador = primeiro("SELECT Manufacturer, Model, TotalPhysicalMemory FROM Win32_ComputerSystem")
         bios = primeiro("SELECT SerialNumber FROM Win32_BIOS")
         sistema = primeiro("SELECT Caption, BuildNumber, ProductType FROM Win32_OperatingSystem")
+        try:
+            produtos_windows = list(servico.ExecQuery(
+                "SELECT Name, LicenseStatus, EvaluationEndDate FROM SoftwareLicensingProduct "
+                "WHERE ApplicationID='55c92734-d682-4d71-983e-d6ec3f16059f' "
+                "AND PartialProductKey IS NOT NULL"
+            ))
+        except Exception:
+            # Falha nesta classe não deve impedir a coleta dos demais dados WMI.
+            produtos_windows = []
         processadores = list(servico.ExecQuery("SELECT Name, NumberOfLogicalProcessors FROM Win32_Processor"))
         discos = servico.ExecQuery("SELECT DeviceID, Size FROM Win32_LogicalDisk WHERE DriveType = 3")
         adaptadores = servico.ExecQuery("SELECT IPEnabled FROM Win32_NetworkAdapterConfiguration WHERE IPEnabled = TRUE")
@@ -64,6 +92,38 @@ def _dados_windows():
         else:
             nome_sistema = caption
             tipo = "Computador"
+        edicao_windows = re.sub(r"^Microsoft\s+", "", caption, flags=re.IGNORECASE).strip()
+
+        # Consulta apenas status e data de avaliação; nenhuma chave é coletada.
+        status_ativacao = None
+        expira_em = None
+        try:
+            produtos_windows = [
+                p for p in produtos_windows
+                if "windows" in str(p.Name or "").lower()
+            ]
+            produto_windows = next(
+                (p for p in produtos_windows if int(p.LicenseStatus or 0) == 1),
+                produtos_windows[0] if produtos_windows else None,
+            )
+            if produto_windows:
+                status_numero = int(produto_windows.LicenseStatus or 0)
+                status_ativacao = {
+                    0: "Não licenciado",
+                    1: "Ativo",
+                    2: "Período de carência inicial",
+                    3: "Período de carência",
+                    4: "Período de carência não genuína",
+                    5: "Notificação de ativação",
+                    6: "Período de carência estendido",
+                }.get(status_numero, "Estado de ativação desconhecido")
+                expira_em = _data_wmi_para_iso(
+                    getattr(produto_windows, "EvaluationEndDate", None)
+                )
+        except Exception:
+            # A licença é complementar; uma falha no provider não pode derrubar o inventário.
+            status_ativacao = None
+            expira_em = None
 
         volumes = []
         for disco in discos:
@@ -92,6 +152,9 @@ def _dados_windows():
             "modelo": f"{fabricante} {modelo}".strip() or None,
             "serial_number": str(bios.SerialNumber or "").strip() or None if bios else None,
             "sistema_op": f"{nome_sistema} (build {build})",
+            "edicao_windows": edicao_windows[:100],
+            "status_ativacao_windows": status_ativacao,
+            "licenca_windows_expira": expira_em,
             "processador": processador,
             "memoria": _formatar_gib(int(computador.TotalPhysicalMemory or 0)),
             "armazenamento": " | ".join(volumes) or None,
@@ -174,8 +237,8 @@ def _dados_linux():
     }
 
 
-def coletar_inventario_local():
-    """Retorna os campos disponíveis da máquina onde o agente está executando."""
+def coletar_inventario_local(incluir_software=False):
+    """Retorna o inventário local; o argumento legado não habilita coleta de programas."""
     sistema = platform.system()
     if sistema == "Windows":
         dados = _dados_windows()

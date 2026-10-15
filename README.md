@@ -82,7 +82,7 @@ Acesse `http://localhost:5000` e use **Escanear Agora** somente após confirmar 
 
 ### Agente de coleta e instalação como serviço
 
-O agente coleta localmente dados do computador e registra um token individual no servidor. No Windows, consulta o WMI local pela API COM do sistema via `pywin32`; isso não habilita nem usa WinRM remoto. Para testar em laboratório, instale as dependências Python no computador-alvo (`pip install -r agent-requirements.txt`), configure `RADAR_AGENT_ENROLLMENT_TOKEN` no `.env` do servidor e inicie o servidor. Dentro da cópia do projeto no computador a registrar, execute:
+O agente coleta localmente dados do computador e registra um token individual no servidor. No Windows, consulta o WMI local pela API COM do sistema via `pywin32`; isso não habilita nem usa WinRM remoto. A edição vem de `Win32_OperatingSystem.Caption`. O estado de ativação e a data de avaliação, quando aplicável, vêm de `SoftwareLicensingProduct`; o RADAR não coleta chaves de produto. “Ativo” significa que o Windows informa estado licenciado/ativado, não comprovação da titularidade comercial. A data só aparece quando o Windows informa `EvaluationEndDate` (por exemplo, em licenças de avaliação); licenças comuns podem não ter uma data de expiração exposta. Prazo de renovação ou carência do KMS não é tratado como vencimento da licença. Para testar em laboratório, instale as dependências Python no computador-alvo (`pip install -r agent-requirements.txt`), configure `RADAR_AGENT_ENROLLMENT_TOKEN` no `.env` do servidor e inicie o servidor. Dentro da cópia do projeto no computador a registrar, execute:
 
 ```bash
 python -m agent.client --register --server-url http://IP-DO-SERVIDOR:5000 --allow-insecure-http
@@ -96,7 +96,7 @@ Para uma coleta pontual manual, use:
 python -m agent.client --once --allow-insecure-http
 ```
 
-Os scripts abaixo instalam o agente para iniciar junto com o sistema e repetir a coleta a cada 15 minutos. Execute-os somente após registrar a rede e o certificado autorizados com os responsáveis pela infraestrutura.
+Os scripts abaixo instalam o agente para iniciar junto com o sistema e repetir a coleta a cada 60 segundos por padrão. Execute-os somente após registrar a rede e o certificado autorizados com os responsáveis pela infraestrutura.
 
 No Windows, abra PowerShell como administrador na raiz do projeto. O agente roda como a conta interna `SYSTEM` pela Tarefa Agendada; não cria usuário local nem armazena a senha do administrador. Para o laboratório doméstico sem HTTPS:
 

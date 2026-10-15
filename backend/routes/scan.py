@@ -46,7 +46,9 @@ def executar_varredura(app, disparado_por: str = "automatico"):
                 )
                 if idade > limite:
                     dispositivo.status = "offline"
-                elif dispositivo.status != "offline":
+                else:
+                    # Uma coleta recente confirma que o agente está presente,
+                    # mesmo que uma varredura anterior tenha marcado offline.
                     dispositivo.status = "online"
                 # Agentes podem estar em outra rede autorizada (ex.: 9º andar),
                 # fora da sub-rede que o scanner percorre.
@@ -142,6 +144,7 @@ def executar_varredura(app, disparado_por: str = "automatico"):
                 if idade <= limite:
                     # A coleta local recente é a fonte principal do computador;
                     # SNMP não deve substituir dados mais completos do agente.
+                    dispositivo.status = "online"
                     continue
 
             if res["status"] == "online":

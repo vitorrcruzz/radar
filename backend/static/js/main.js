@@ -342,10 +342,17 @@ function abrirModal(d) {
       <div class="col-md-6">
         <div class="info-card" style="${ti}">
           <div class="info-label"><i class="bi bi-key me-1"></i>Licença</div>
+          <p class="small text-muted mb-2">Ativação e edição reportadas pelo Windows. Isso não comprova a titularidade comercial da licença.</p>
           <table class="table table-sm table-borderless mb-0">
-            <tr><td style="width:45%;${tm}">Software</td>
+            <tr><td style="width:45%;${tm}">Edição do Windows</td>
+                <td style="${tc}"><strong>${escaparHtml(d.edicao_windows)}</strong></td></tr>
+            <tr><td style="${tm}">Ativação do Windows</td>
+                <td style="${tc}"><strong>${escaparHtml(d.status_ativacao_windows)}</strong></td></tr>
+            <tr><td style="${tm}">Expiração informada pelo Windows</td>
+                <td style="${tc}"><strong>${escaparHtml(d.licenca_windows_expira)}</strong></td></tr>
+            <tr><td style="${tm}">Licença cadastrada</td>
                 <td style="${tc}"><strong>${d.licenca_software}</strong></td></tr>
-            <tr><td style="${tm}">Expira em</td>
+            <tr><td style="${tm}">Validade cadastrada</td>
                 <td style="${tc}"><strong>${d.licenca_expira}</strong></td></tr>
             <tr><td style="${tm}">Status</td>
                 <td>${badgeLicenca(d)}</td></tr>
@@ -448,6 +455,15 @@ async function salvarEdicaoManual() {
 
 // ── Tabela de dispositivos ─────────────────────────────
 function badgeLicenca(d) {
+  const ativacaoWindows = d.status_ativacao_windows;
+  if (ativacaoWindows && ativacaoWindows !== 'Não coletado') {
+    if (ativacaoWindows === 'Ativo') {
+      return '<span class="badge bg-success">Ativa no Windows</span>';
+    }
+    const cor = ativacaoWindows === 'Não licenciado' || ativacaoWindows === 'Notificação de ativação'
+      ? 'bg-danger' : 'bg-warning text-dark';
+    return `<span class="badge ${cor}">${escaparHtml(ativacaoWindows)}</span>`;
+  }
   if (d.licenca_expira === '—' || d.licenca_expira === null) {
     return '<span class="badge bg-secondary">Sem licença</span>';
   }

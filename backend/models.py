@@ -43,6 +43,9 @@ class Dispositivo(db.Model):
     status           = db.Column(db.String(10), default="offline")
     licenca_software = db.Column(db.String(100))
     licenca_expira   = db.Column(db.Date)
+    edicao_windows   = db.Column(db.String(100))
+    status_ativacao_windows = db.Column(db.String(60))
+    licenca_windows_expira = db.Column(db.Date)
     ultima_vez       = db.Column(db.DateTime, default=datetime.now)
     criado_em        = db.Column(db.DateTime, default=datetime.now)
     campos_manuais   = db.relationship(
@@ -95,6 +98,9 @@ class Dispositivo(db.Model):
             "licenca_expira":   self.licenca_expira.strftime("%d/%m/%Y") if self.licenca_expira else "—",
             "dias_para_expirar": dias,
             "status_licenca":   self.status_licenca(),
+            "edicao_windows":   self.edicao_windows or "—",
+            "status_ativacao_windows": self.status_ativacao_windows or "Não coletado",
+            "licenca_windows_expira": self.licenca_windows_expira.strftime("%d/%m/%Y") if self.licenca_windows_expira else "Sem expiração informada",
             "ultima_vez":       self.ultima_vez.strftime("%d/%m/%Y %H:%M:%S") if self.ultima_vez else "—",
             "criado_em":        self.criado_em.strftime("%d/%m/%Y %H:%M:%S") if self.criado_em else "—",
         }
