@@ -1,9 +1,11 @@
-from datetime import datetime
+from datetime import date, datetime
 import os
 from flask import Blueprint, jsonify, request
+from sqlalchemy.orm import selectinload
 from backend.database import db
 from backend.auth import perfil_requerido
 from backend.models import Agente, CampoManualDispositivo, Dispositivo, HistoricoVarredura
+from backend.inventory_query import consulta_dispositivos_com_coleta
 
 devices_bp = Blueprint("devices", __name__)
 
@@ -20,12 +22,15 @@ LIMITES_CAMPOS_MANUAIS = {
     "descricao": 1000,
     "localizacao": 200,
     "contato": 200,
+    "licenca_software": 100,
+    "licenca_expira": 10,
+    "edicao_windows": 100,
 }
 
 
 def _atualizar_status_agentes():
     """Expira status de agente sem esperar a próxima varredura de rede."""
-    limite = max(60, int(os.getenv("AGENT_OFFLINE_AFTER_SECONDS", "120")))
+    limite = max(60, int(os.getenv("AGENT_OFFLINE_AFTER_SECONDS", "900")))
     agora = datetime.now()
     alterado = False
     for agente in Agente.query.all():
@@ -47,7 +52,9 @@ def listar_dispositivos():
     _atualizar_status_agentes()
     tipo   = request.args.get("tipo")
     status = request.args.get("status")
-    query  = Dispositivo.query
+    query  = consulta_dispositivos_com_coleta().options(
+        selectinload(Dispositivo.campos_manuais)
+    )
     if tipo:
         query = query.filter(Dispositivo.tipo == tipo)
     if status:
@@ -58,7 +65,9 @@ def listar_dispositivos():
 @devices_bp.route("/dispositivos/<int:device_id>")
 def detalhar_dispositivo(device_id):
     _atualizar_status_agentes()
-    d = Dispositivo.query.get_or_404(device_id)
+    d = consulta_dispositivos_com_coleta().options(
+        selectinload(Dispositivo.campos_manuais)
+    ).filter_by(id=device_id).first_or_404()
     return jsonify(d.to_dict())
 
 
@@ -80,6 +89,19 @@ def atualizar_campos_manuais(device_id):
         if len(texto) > LIMITES_CAMPOS_MANUAIS[nome]:
             return jsonify({"erro": f"O campo {nome} excede {LIMITES_CAMPOS_MANUAIS[nome]} caracteres."}), 400
 
+        if nome == "licenca_software":
+            dispositivo.licenca_software = texto or None
+            continue
+        if nome == "licenca_expira":
+            if not texto:
+                dispositivo.licenca_expira = None
+            else:
+                try:
+                    dispositivo.licenca_expira = date.fromisoformat(texto)
+                except ValueError:
+                    return jsonify({"erro": "A validade da licença deve ser uma data válida."}), 400
+            continue
+
         registro = existentes.get(nome)
         if not texto:
             if registro:
@@ -99,11 +121,12 @@ def atualizar_campos_manuais(device_id):
 @devices_bp.route("/stats")
 def estatisticas():
     _atualizar_status_agentes()
-    total   = Dispositivo.query.count()
-    online  = Dispositivo.query.filter_by(status="online").count()
-    offline = Dispositivo.query.filter_by(status="offline").count()
+    inventariados = consulta_dispositivos_com_coleta()
+    total   = inventariados.count()
+    online  = inventariados.filter_by(status="online").count()
+    offline = inventariados.filter_by(status="offline").count()
 
-    por_tipo = db.session.query(
+    por_tipo = inventariados.with_entities(
         Dispositivo.tipo,
         db.func.count(Dispositivo.id)
     ).group_by(Dispositivo.tipo).all()

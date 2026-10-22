@@ -2,9 +2,10 @@ import io
 from datetime import datetime
 from flask import Blueprint, send_file
 import pandas as pd
+from sqlalchemy.orm import selectinload
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
-from backend.models import Dispositivo
+from backend.inventory_query import consulta_dispositivos_com_coleta
 
 export_bp = Blueprint("export", __name__)
 
@@ -17,7 +18,9 @@ COLUNAS = [
 ]
 
 def _dispositivos_para_df():
-    dispositivos = Dispositivo.query.order_by(Dispositivo.ip).all()
+    dispositivos = consulta_dispositivos_com_coleta().options(
+        selectinload(Dispositivo.campos_manuais)
+    ).order_by(Dispositivo.ip).all()
     linhas = []
     for d in dispositivos:
         dias = d.dias_para_expirar()

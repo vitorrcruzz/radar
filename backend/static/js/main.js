@@ -397,22 +397,26 @@ const camposEditaveis = [
   ['sistema_op', 'Sistema operacional'], ['processador', 'Processador'],
   ['memoria', 'Memória'], ['armazenamento', 'Armazenamento'],
   ['mac_address', 'MAC Address'], ['serial_number', 'Número de série'],
-  ['descricao', 'Descrição'], ['localizacao', 'Localização'], ['contato', 'Contato']
+  ['descricao', 'Descrição'], ['localizacao', 'Localização'], ['contato', 'Contato'],
+  ['licenca_software', 'Software / licença cadastrada'],
+  ['licenca_expira', 'Validade da licença', 'date'],
+  ['edicao_windows', 'Edição do Windows']
 ];
 
 function editarCamposManuais() {
   const d = window._dispositivoAtual;
   const container = document.getElementById('manual-campos');
   window._dadosOriginaisManual = {};
-  container.innerHTML = camposEditaveis.map(([campo, rotulo]) => `
+  container.innerHTML = camposEditaveis.map(([campo, rotulo, tipo = 'text']) => `
     <div class="col-md-6">
       <label class="form-label" for="manual-${campo}">${rotulo}</label>
       ${campo === 'descricao'
         ? `<textarea class="form-control" id="manual-${campo}" rows="2"></textarea>`
-        : `<input class="form-control" id="manual-${campo}" type="text">`}
+        : `<input class="form-control" id="manual-${campo}" type="${tipo}">`}
     </div>`).join('');
   camposEditaveis.forEach(([campo]) => {
-    const valor = d[campo] === '—' ? '' : (d[campo] ?? '');
+    const valorAtual = campo === 'licenca_expira' ? d.licenca_expira_iso : d[campo];
+    const valor = valorAtual === '—' ? '' : (valorAtual ?? '');
     window._dadosOriginaisManual[campo] = String(valor);
     document.getElementById(`manual-${campo}`).value = valor;
   });

@@ -96,6 +96,7 @@ class Dispositivo(db.Model):
             "status":           self.status,
             "licenca_software": self.licenca_software or "—",
             "licenca_expira":   self.licenca_expira.strftime("%d/%m/%Y") if self.licenca_expira else "—",
+            "licenca_expira_iso": self.licenca_expira.isoformat() if self.licenca_expira else "",
             "dias_para_expirar": dias,
             "status_licenca":   self.status_licenca(),
             "edicao_windows":   self.edicao_windows or "—",

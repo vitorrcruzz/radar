@@ -8,6 +8,7 @@ from backend.auth import perfil_requerido
 from backend.database import db
 from backend.models import Agente, Dispositivo, HistoricoVarredura
 from backend.network_labels import identificar_rede
+from backend.inventory_query import consulta_dispositivos_com_coleta
 
 scan_bp = Blueprint("scan", __name__)
 
@@ -61,31 +62,32 @@ def executar_varredura(app, disparado_por: str = "automatico"):
 
         resultados   = escanear_rede(rede, community)
 
-        # Ping ajuda a localizar computadores sem SNMP para planejar a
-        # implantação do agente. Não fornece hardware e pode ser bloqueado.
-        from collector.network_discovery import descobrir_hosts
-        ips_snmp = {item["ip"] for item in resultados}
-        try:
-            hosts_ping = descobrir_hosts(
-                rede,
-                max_concorrencia=int(os.getenv("DISCOVERY_CONCURRENCY", "32")),
-                timeout_ms=int(os.getenv("DISCOVERY_PING_TIMEOUT_MS", "800")),
-            )
-        except (ValueError, OSError) as erro:
-            logging.warning("Descoberta ICMP não executada (%s).", type(erro).__name__)
-            hosts_ping = []
-        for ip in hosts_ping:
-            if ip in ips_snmp:
-                continue
-            resultados.append({
-                "ip": ip,
-                "status": "online",
-                "dados": {
-                    "tipo": "Host sem coleta",
-                    "descricao": "Host identificado por ICMP; inventário detalhado exige agente RADAR ou resposta SNMP.",
-                    "interfaces": 0,
-                },
-            })
+        # Descoberta ICMP é opcional: por padrão não varre nem persiste hosts
+        # sem inventário, reduzindo carga e ruído no painel.
+        if os.getenv("DISCOVERY_ICMP_ENABLED", "false").strip().lower() in {"1", "true", "yes", "sim"}:
+            from collector.network_discovery import descobrir_hosts
+            ips_snmp = {item["ip"] for item in resultados}
+            try:
+                hosts_ping = descobrir_hosts(
+                    rede,
+                    max_concorrencia=int(os.getenv("DISCOVERY_CONCURRENCY", "32")),
+                    timeout_ms=int(os.getenv("DISCOVERY_PING_TIMEOUT_MS", "800")),
+                )
+            except (ValueError, OSError) as erro:
+                logging.warning("Descoberta ICMP não executada (%s).", type(erro).__name__)
+                hosts_ping = []
+            for ip in hosts_ping:
+                if ip in ips_snmp:
+                    continue
+                resultados.append({
+                    "ip": ip,
+                    "status": "online",
+                    "dados": {
+                        "tipo": "Host sem coleta",
+                        "descricao": "Host identificado por ICMP; inventário detalhado exige agente RADAR ou resposta SNMP.",
+                        "interfaces": 0,
+                    },
+                })
 
         # WMI/WinRM é complementar: somente tenta hosts Windows que já
         # responderam a SNMP e somente quando o administrador configurou
@@ -180,9 +182,10 @@ def executar_varredura(app, disparado_por: str = "automatico"):
         db.session.commit()
 
         # Conta totais reais do banco
-        total_offline = Dispositivo.query.filter_by(status="offline").count()
-        total_online  = Dispositivo.query.filter_by(status="online").count()
-        total_geral   = Dispositivo.query.count()
+        inventariados = consulta_dispositivos_com_coleta()
+        total_offline = inventariados.filter_by(status="offline").count()
+        total_online  = inventariados.filter_by(status="online").count()
+        total_geral   = inventariados.count()
 
         historico.finalizado_em   = datetime.now()
         historico.total_escaneado = total_geral

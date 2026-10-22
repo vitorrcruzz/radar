@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1120" viewBox="0 0 1600 1120" role="img" aria-labelledby="title desc">
+  <title id="title">Arquitetura atual do sistema R.A.D.A.R.</title>
+  <desc id="desc">Diagrama da arquitetura híbrida do RADAR, com agentes em computadores, consultas SNMP e ICMP, servidor Python, banco SQLite e dashboard web, além dos itens ainda planejados.</desc>
+  <defs>
+    <marker id="arrowBlue" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M1 1 L11 6 L1 11 Z" fill="#1683a6"/></marker>
+    <marker id="arrowGreen" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M1 1 L11 6 L1 11 Z" fill="#22815e"/></marker>
+    <marker id="arrowOrange" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M1 1 L11 6 L1 11 Z" fill="#b66b19"/></marker>
+    <style>
+      text{font-family:Arial,Helvetica,sans-serif;fill:#253247}
+      .title{font-size:31px;font-weight:700;fill:#173b5c}
+      .subtitle{font-size:16px;fill:#52677d}
+      .coltitle{font-size:19px;font-weight:700}
+      .cardtitle{font-size:16px;font-weight:700}
+      .body{font-size:14px}
+      .small{font-size:12px;fill:#52677d}
+      .badge{font-size:12px;font-weight:700}
+      .section{font-size:13px;font-weight:700;letter-spacing:.4px}
+    </style>
+  </defs>
+  <rect width="1600" height="1120" fill="#ffffff"/>
+  <text x="60" y="58" class="title">Arquitetura atual do sistema R.A.D.A.R.</text>
+  <text x="60" y="88" class="subtitle">Coleta híbrida de inventário: agente local nos computadores e SNMP nos equipamentos de rede</text>
+
+  <!-- column backgrounds -->
+  <rect x="42" y="125" width="330" height="650" rx="18" fill="#f1f6fc" stroke="#83a9d1" stroke-width="2"/>
+  <rect x="405" y="125" width="690" height="650" rx="18" fill="#f0f8f4" stroke="#72b58d" stroke-width="2"/>
+  <rect x="1128" y="125" width="430" height="650" rx="18" fill="#f7f2fb" stroke="#a88acb" stroke-width="2"/>
+  <text x="66" y="161" class="coltitle" fill="#315f91">Ativos e rede autorizada</text>
+  <text x="430" y="161" class="coltitle" fill="#28724f">Servidor RADAR</text>
+  <text x="1154" y="161" class="coltitle" fill="#7652a5">Painel web</text>
+
+  <!-- source cards -->
+  <rect x="66" y="184" width="282" height="145" rx="12" fill="#ffffff" stroke="#8bb0d8"/>
+  <rect x="66" y="184" width="282" height="38" rx="12" fill="#dceafa"/>
+  <text x="84" y="209" class="cardtitle" fill="#315f91">Computadores Windows</text>
+  <text x="84" y="248" class="body">Agente RADAR local</text>
+  <text x="84" y="272" class="body">WMI/COM via pywin32</text>
+  <text x="84" y="296" class="body">Hardware, sistema e ativação</text>
+  <text x="84" y="317" class="small">Coleta local; token individual</text>
+
+  <rect x="66" y="346" width="282" height="124" rx="12" fill="#ffffff" stroke="#8bb0d8"/>
+  <rect x="66" y="346" width="282" height="38" rx="12" fill="#dceafa"/>
+  <text x="84" y="371" class="cardtitle" fill="#315f91">Computadores Linux</text>
+  <text x="84" y="411" class="body">Agente RADAR multiplataforma</text>
+  <text x="84" y="435" class="body">psutil e dados do sistema</text>
+  <text x="84" y="457" class="small">Código disponível; validação pendente</text>
+
+  <rect x="66" y="487" width="282" height="156" rx="12" fill="#ffffff" stroke="#8bb0d8"/>
+  <rect x="66" y="487" width="282" height="38" rx="12" fill="#dceafa"/>
+  <text x="84" y="512" class="cardtitle" fill="#315f91">Equipamentos com SNMP</text>
+  <text x="84" y="552" class="body">Switches, roteadores, APs</text>
+  <text x="84" y="576" class="body">Impressoras, câmeras, nobreaks</text>
+  <text x="84" y="602" class="body">MIB-II, IF-MIB e ENTITY-MIB</text>
+  <text x="84" y="627" class="small">Disponibilidade varia por fabricante</text>
+
+  <rect x="66" y="660" width="282" height="91" rx="12" fill="#ffffff" stroke="#8bb0d8"/>
+  <text x="84" y="690" class="cardtitle" fill="#315f91">Descoberta auxiliar</text>
+  <text x="84" y="716" class="body">Ping identifica presença; sem detalhes</text>
+  <text x="84" y="738" class="small">Hosts podem bloquear ICMP</text>
+
+  <!-- server body -->
+  <rect x="430" y="184" width="640" height="78" rx="12" fill="#e0f3e8" stroke="#82c59d"/>
+  <text x="454" y="214" class="cardtitle" fill="#28724f">Aplicação Python / Flask</text>
+  <text x="454" y="239" class="body">API web, login e perfis • API autenticada para agentes • execução de varreduras</text>
+  <rect x="430" y="280" width="310" height="145" rx="12" fill="#ffffff" stroke="#82c59d"/>
+  <text x="452" y="311" class="cardtitle" fill="#28724f">Coletor SNMP</text>
+  <text x="452" y="340" class="body">PySNMP • UDP 161</text>
+  <text x="452" y="364" class="body">Código com perfis v1, v2c e v3</text>
+  <text x="452" y="389" class="small">v2c validado; configuração completa pendente</text>
+  <text x="452" y="411" class="small">Pesquisa em sub-rede autorizada</text>
+
+  <rect x="758" y="280" width="312" height="145" rx="12" fill="#ffffff" stroke="#82c59d"/>
+  <text x="780" y="311" class="cardtitle" fill="#28724f">Recepção do agente</text>
+  <text x="780" y="340" class="body">Token individual por instalação</text>
+  <text x="780" y="364" class="body">HTTPS pela rede local</text>
+  <text x="780" y="389" class="small">Dados locais do computador</text>
+  <text x="780" y="411" class="small">Heartbeat e status online/offline</text>
+
+  <rect x="430" y="444" width="640" height="124" rx="12" fill="#ffffff" stroke="#82c59d"/>
+  <text x="452" y="476" class="cardtitle" fill="#28724f">Persistência • SQLite</text>
+  <text x="452" y="505" class="body">Ativos e dados coletados • histórico de coletas e varreduras</text>
+  <text x="452" y="530" class="body">Correções manuais • cadastro básico de licença e validade</text>
+  <text x="452" y="553" class="small">Gestão completa de licenças ainda em desenvolvimento</text>
+
+  <rect x="430" y="586" width="640" height="165" rx="12" fill="#ffffff" stroke="#82c59d"/>
+  <text x="452" y="618" class="cardtitle" fill="#28724f">Agendamento e regras de presença</text>
+  <text x="452" y="650" class="body">Varredura automática da rede: a cada 5 minutos</text>
+  <text x="452" y="676" class="body">Agentes: coleta periódica, 60 segundos por padrão</text>
+  <text x="452" y="702" class="body">Ativos sem resposta: status offline após o limite configurado</text>
+  <text x="452" y="729" class="small">Implantação atual: Ubuntu Server • Docker Compose</text>
+
+  <!-- dashboard -->
+  <rect x="1154" y="184" width="378" height="98" rx="12" fill="#ffffff" stroke="#b29ad2"/>
+  <text x="1178" y="216" class="cardtitle" fill="#7652a5">Acesso HTTPS com autenticação</text>
+  <text x="1178" y="246" class="body">Administrador e usuário comum</text>
+  <text x="1178" y="269" class="small">Disponível pela rede local no piloto</text>
+
+  <rect x="1154" y="300" width="378" height="138" rx="12" fill="#ffffff" stroke="#b29ad2"/>
+  <text x="1178" y="332" class="cardtitle" fill="#7652a5">Inventário de dispositivos</text>
+  <text x="1178" y="362" class="body">Dados coletados e campos não informados</text>
+  <text x="1178" y="386" class="body">Busca, filtros e status de presença</text>
+  <text x="1178" y="414" class="small">Edição manual de dados selecionados</text>
+
+  <rect x="1154" y="456" width="378" height="107" rx="12" fill="#ffffff" stroke="#b29ad2"/>
+  <text x="1178" y="488" class="cardtitle" fill="#7652a5">Histórico e relatórios</text>
+  <text x="1178" y="519" class="body">Histórico das varreduras</text>
+  <text x="1178" y="544" class="body">Exportação CSV e Excel</text>
+
+  <rect x="1154" y="581" width="378" height="170" rx="12" fill="#fffaf1" stroke="#d5aa63" stroke-dasharray="7 5"/>
+  <text x="1178" y="613" class="cardtitle" fill="#9a641f">Em desenvolvimento</text>
+  <text x="1178" y="645" class="body">Importação e gestão ampliada de licenças</text>
+  <text x="1178" y="670" class="body">Ciclo patrimonial e histórico de manutenção</text>
+  <text x="1178" y="695" class="body">Validação nativa do servidor em Windows/Linux</text>
+  <text x="1178" y="724" class="small">Green IT: suporte à decisão; sem métricas ambientais</text>
+
+  <!-- connectors, drawn over backgrounds and under labels -->
+  <path d="M348 255 C378 255 390 220 430 220" fill="none" stroke="#1683a6" stroke-width="3" marker-end="url(#arrowBlue)"/>
+  <text x="360" y="232" class="badge" fill="#1683a6">HTTPS</text>
+  <path d="M348 407 C390 407 390 238 430 238" fill="none" stroke="#1683a6" stroke-width="3" marker-end="url(#arrowBlue)"/>
+  <path d="M430 342 C392 342 392 566 348 566" fill="none" stroke="#22815e" stroke-width="3" marker-end="url(#arrowGreen)"/>
+  <text x="354" y="541" class="badge" fill="#22815e">SNMP • UDP 161</text>
+  <path d="M430 373 C384 373 384 704 348 704" fill="none" stroke="#b66b19" stroke-width="2.5" stroke-dasharray="7 5" marker-end="url(#arrowOrange)"/>
+  <text x="354" y="684" class="badge" fill="#9a641f">ICMP</text>
+  <path d="M1070 220 C1100 220 1110 232 1154 232" fill="none" stroke="#7652a5" stroke-width="3" marker-start="url(#arrowBlue)" marker-end="url(#arrowBlue)"/>
+  <text x="1080" y="205" class="badge" fill="#7652a5">HTTPS</text>
+
+  <!-- footer status -->
+  <rect x="42" y="802" width="1516" height="90" rx="15" fill="#f4f6f8" stroke="#d2d9e0"/>
+  <text x="66" y="835" class="section" fill="#43576b">ESCOPO DO PILOTO</text>
+  <text x="66" y="865" class="body">Rede inicial: 192.168.1.0/24 • servidor no Ubuntu 22.04 • acesso local via HTTPS • agentes Windows em validação</text>
+
+  <rect x="42" y="914" width="1516" height="126" rx="15" fill="#fffaf1" stroke="#d5aa63" stroke-width="2" stroke-dasharray="8 6"/>
+  <text x="66" y="949" class="section" fill="#9a641f">EVOLUÇÃO PLANEJADA</text>
+  <text x="66" y="980" class="body">Concluir gestão de licenças e registros de ciclo de vida; validar execução nativa multiplataforma e ampliar testes SNMP com credenciais autorizadas.</text>
+  <text x="66" y="1011" class="small">O inventário apoia decisões de manutenção, substituição e destinação. O RADAR ainda não calcula economia de energia, redução de resíduos ou carbono.</text>
+  <text x="60" y="1080" class="small">Fonte: Elaboração própria, 2026.</text>
+</svg>
