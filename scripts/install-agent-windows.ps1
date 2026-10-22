@@ -79,12 +79,13 @@ function Resolve-CompatiblePython {
         }
 
         if ($env:ProgramFiles) {
+            $candidates.Add((Join-Path $env:ProgramFiles 'Python314\python.exe'))
+            $candidates.Add((Join-Path $env:ProgramFiles 'Python 3.14\python.exe'))
             $candidates.Add((Join-Path $env:ProgramFiles 'Python312\python.exe'))
             $candidates.Add((Join-Path $env:ProgramFiles 'Python 3.12\python.exe'))
         }
-        # WinGet can install Python successfully but leave the current
-        # PowerShell process with a stale PATH. Look up registered CPython
-        # installs directly instead of relying only on PATH/py.exe.
+        # Look up registered CPython installs directly instead of relying
+        # only on PATH or the Python launcher.
         foreach ($registryPath in @(
             'HKLM:\SOFTWARE\Python\PythonCore',
             'HKLM:\SOFTWARE\WOW6432Node\Python\PythonCore',
@@ -113,7 +114,7 @@ function Resolve-CompatiblePython {
 
         $launcher = Get-Command py.exe -ErrorAction SilentlyContinue
         if ($launcher) {
-            foreach ($minorVersion in @('3.12', '3.11', '3.10')) {
+            foreach ($minorVersion in @('3.14', '3.13', '3.12', '3.11', '3.10')) {
                 $probe = Invoke-NativeCaptured -FilePath $launcher.Source -Arguments @(
                     "-$minorVersion", '-c', 'import sys; print(sys.executable)'
                 )
@@ -153,26 +154,7 @@ if (-not $resolvedPython -and $PythonPath) {
 }
 
 if (-not $resolvedPython) {
-    $winget = Get-Command winget.exe -ErrorAction SilentlyContinue
-    if (-not $winget) {
-        throw 'Python 3.10+ nao encontrado e winget nao esta disponivel. Instale Python 3.12 x64 aprovado pela empresa ou informe o caminho com -PythonPath.'
-    }
-
-    Write-Host 'Python 3.10+ nao encontrado. Instalando Python 3.12 x64 para todos os usuarios via winget...'
-    $installResult = Invoke-NativeCaptured -FilePath $winget.Source -Arguments @(
-        'install', '--id', 'Python.Python.3.12', '--exact', '--source', 'winget',
-        '--scope', 'machine', '--architecture', 'x64', '--silent',
-        '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity'
-    )
-    $wingetExitCode = $installResult.ExitCode
-    $resolvedPython = Resolve-CompatiblePython
-    if (-not $resolvedPython) {
-        if ($installResult.Output) {
-            Write-Host 'Saída do WinGet:'
-            $installResult.Output | ForEach-Object { Write-Host $_ }
-        }
-        throw "O WinGet terminou com codigo $wingetExitCode, mas o instalador nao localizou um Python 3.10+. Feche e reabra o PowerShell e tente novamente; se persistir, informe o caminho completo de python.exe com -PythonPath."
-    }
+    throw 'Python 3.10+ nao encontrado. Instale o Python manualmente e execute novamente, informando o caminho completo do python.exe com -PythonPath (por exemplo: -PythonPath "C:\Program Files\Python314\python.exe"). O instalador RADAR nao baixa nem instala o Python.'
 }
 $PythonPath = $resolvedPython
 Write-Host "Python selecionado: $PythonPath"
