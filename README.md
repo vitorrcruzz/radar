@@ -102,10 +102,10 @@ No Windows, abra PowerShell como administrador na raiz do projeto. O agente roda
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
-.\scripts\install-agent-windows.ps1 -ServerUrl "http://IP-DO-SERVIDOR:5000" -AllowInsecureHttp
+.\scripts\install-agent-windows.ps1 -ServerUrl "http://IP-DO-SERVIDOR:5000" -AllowInsecureHttp -PythonPath "C:\Program Files\Python314\python.exe"
 ```
 
-Para HTTPS com CA interna confiável, omita `-AllowInsecureHttp` e informe `-CaBundle "C:\caminho\empresa-ca.pem"`. O script pedirá o token inicial de registro sem exibi-lo, instalará as dependências em um ambiente virtual separado e criará a tarefa `RADAR Agent`. Se não encontrar Python 3.10 ou superior, tentará instalar Python 3.12 x64 para todos os usuários via WinGet (`Python.Python.3.12`); essa etapa requer PowerShell elevado e acesso às fontes WinGet e PyPI. Se WinGet não estiver disponível ou for bloqueado pela política da empresa, instale uma versão aprovada de Python manualmente e informe o executável com `-PythonPath`. O arquivo de estado e o log ficam em `%ProgramData%\RADAR`; acesso limitado a `SYSTEM` e Administradores. Para verificar a tarefa, use `Get-ScheduledTask -TaskName 'RADAR Agent'`; o log pode ser lido com `Get-Content "$env:ProgramData\RADAR\agent.log" -Wait`.
+Para HTTPS com CA interna confiável, omita `-AllowInsecureHttp` e informe `-CaBundle "C:\caminho\empresa-ca.pem"`. O script pedirá o token inicial de registro sem exibi-lo, instalará as dependências em um ambiente virtual separado e criará a tarefa `RADAR Agent`. O instalador não baixa nem instala o Python: instale-o previamente (Python 3.10 ou superior; Python 3.14 é aceito) e informe o executável com `-PythonPath`, por exemplo `-PythonPath "C:\Program Files\Python314\python.exe"`. O arquivo de estado e o log ficam em `%ProgramData%\RADAR`; acesso limitado a `SYSTEM` e Administradores. Para verificar a tarefa, use `Get-ScheduledTask -TaskName 'RADAR Agent'`; o log pode ser lido com `Get-Content "$env:ProgramData\RADAR\agent.log" -Wait`.
 
 No Linux com systemd, execute como root (por exemplo, com `sudo`). O serviço roda sob a conta interna `root` para ler os identificadores de hardware locais; não cria outro usuário nem guarda senha. Para HTTPS:
 
