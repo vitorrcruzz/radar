@@ -1,6 +1,6 @@
 /* ── Variáveis de tema ───────────────────────────────── */
 :root {
-  --azul-fatec:    #1F4E79;
+  --azul-radar:    #1F4E79;
   --azul-claro:    #2E75B6;
   --cinza-bg:      #F4F6F9;
   --sidebar-bg:    #1F4E79;
@@ -21,7 +21,7 @@
 }
 
 [data-theme="nordic"] {
-  --azul-fatec:    #1a1f2e;
+  --azul-radar:    #1a1f2e;
   --azul-claro:    #4fc3f7;
   --cinza-bg:      #0d1117;
   --sidebar-bg:    #161b27;

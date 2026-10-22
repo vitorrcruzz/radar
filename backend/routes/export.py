@@ -81,7 +81,7 @@ def exportar_excel():
         # ── Título ──
         ws.merge_cells(f"A1:{get_column_letter(num_cols)}2")
         titulo = ws["A1"]
-        titulo.value      = "Inventário de Equipamentos de TI — FATEC Osasco"
+        titulo.value      = "Inventário de Equipamentos de TI — CH3 Construtora"
         titulo.font       = Font(name="Calibri", size=14, bold=True, color="FFFFFF")
         titulo.fill       = PatternFill("solid", fgColor="1F4E79")
         titulo.alignment  = Alignment(horizontal="center", vertical="center")
@@ -132,7 +132,7 @@ def exportar_excel():
         rodape_row = 5 + len(df) + 1
         ws.merge_cells(f"A{rodape_row}:{get_column_letter(num_cols)}{rodape_row}")
         rf = ws.cell(row=rodape_row, column=1)
-        rf.value     = f"Gerado em {datetime.now().strftime('%d/%m/%Y às %H:%M:%S')} — TCC FATEC Osasco 2026"
+        rf.value     = f"Gerado em {datetime.now().strftime('%d/%m/%Y às %H:%M:%S')} — R.A.D.A.R. · CH3 Construtora"
         rf.font      = Font(name="Calibri", size=9, italic=True, color="808080")
         rf.alignment = Alignment(horizontal="right")
 
