@@ -73,7 +73,7 @@ class Dispositivo(db.Model):
             return "atencao"
         return "ok"
 
-    def to_dict(self):
+    def to_dict(self, incluir_software=False):
         dias = self.dias_para_expirar()
         dados = {
             "id":               self.id,
@@ -102,13 +102,31 @@ class Dispositivo(db.Model):
             "edicao_windows":   self.edicao_windows or "—",
             "status_ativacao_windows": self.status_ativacao_windows or "Não coletado",
             "licenca_windows_expira": self.licenca_windows_expira.strftime("%d/%m/%Y") if self.licenca_windows_expira else "Sem expiração informada",
+            "licenca_windows_expira_iso": self.licenca_windows_expira.isoformat() if self.licenca_windows_expira else "",
             "ultima_vez":       self.ultima_vez.strftime("%d/%m/%Y %H:%M:%S") if self.ultima_vez else "—",
             "criado_em":        self.criado_em.strftime("%d/%m/%Y %H:%M:%S") if self.criado_em else "—",
         }
         dados["fontes_manuais"] = []
         for campo_manual in self.campos_manuais:
-            dados[campo_manual.campo] = campo_manual.valor or "—"
+            valor_manual = campo_manual.valor or "—"
+            if campo_manual.campo == "licenca_windows_expira":
+                try:
+                    data_manual = date.fromisoformat(campo_manual.valor)
+                    dados[campo_manual.campo] = data_manual.strftime("%d/%m/%Y")
+                    dados["licenca_windows_expira_iso"] = data_manual.isoformat()
+                except (TypeError, ValueError):
+                    dados[campo_manual.campo] = valor_manual
+                    dados["licenca_windows_expira_iso"] = ""
+            elif campo_manual.campo == "interfaces":
+                try:
+                    dados[campo_manual.campo] = int(campo_manual.valor)
+                except (TypeError, ValueError):
+                    dados[campo_manual.campo] = valor_manual
+            else:
+                dados[campo_manual.campo] = valor_manual
             dados["fontes_manuais"].append(campo_manual.campo)
+        if incluir_software:
+            dados["softwares_instalados"] = [software.to_dict() for software in self.softwares_instalados]
         return dados
 
 
@@ -123,6 +141,34 @@ class CampoManualDispositivo(db.Model):
 
     dispositivo = db.relationship("Dispositivo", back_populates="campos_manuais")
     __table_args__ = (db.UniqueConstraint("dispositivo_id", "campo"),)
+
+
+class SoftwareInstalado(db.Model):
+    __tablename__ = "softwares_instalados"
+
+    id = db.Column(db.Integer, primary_key=True)
+    dispositivo_id = db.Column(db.Integer, db.ForeignKey("dispositivos.id", ondelete="CASCADE"), nullable=False, index=True)
+    nome = db.Column(db.String(150), nullable=False)
+    fabricante = db.Column(db.String(120))
+    versao = db.Column(db.String(80))
+    tipo_licenca = db.Column(db.String(80))
+    expira_em = db.Column(db.Date)
+    observacao = db.Column(db.Text)
+    criado_em = db.Column(db.DateTime, nullable=False, default=datetime.now)
+    atualizado_em = db.Column(db.DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
+
+    dispositivo = db.relationship("Dispositivo", backref=db.backref("softwares_instalados", lazy="select"))
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "nome": self.nome,
+            "fabricante": self.fabricante or "",
+            "versao": self.versao or "",
+            "tipo_licenca": self.tipo_licenca or "",
+            "expira_em": self.expira_em.isoformat() if self.expira_em else "",
+            "observacao": self.observacao or "",
+        }
 
 
 class Agente(db.Model):

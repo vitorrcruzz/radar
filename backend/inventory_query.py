@@ -3,7 +3,7 @@
 from sqlalchemy import and_, or_
 
 from backend.database import db
-from backend.models import Agente, CampoManualDispositivo, Dispositivo
+from backend.models import Agente, CampoManualDispositivo, Dispositivo, SoftwareInstalado
 
 
 def consulta_dispositivos_com_coleta():
@@ -20,6 +20,9 @@ def consulta_dispositivos_com_coleta():
         CampoManualDispositivo.dispositivo_id == Dispositivo.id,
         CampoManualDispositivo.valor.isnot(None),
         CampoManualDispositivo.valor != "",
+    ).exists()
+    software_cadastrado = db.session.query(SoftwareInstalado.id).filter(
+        SoftwareInstalado.dispositivo_id == Dispositivo.id,
     ).exists()
 
     campos_texto = (
@@ -55,4 +58,4 @@ def consulta_dispositivos_com_coleta():
         or_(campo_com_valor, tipo_coletado),
     )
 
-    return Dispositivo.query.filter(or_(coleta_agente, dados_manuais, inventario_snmp))
+    return Dispositivo.query.filter(or_(coleta_agente, dados_manuais, software_cadastrado, inventario_snmp))

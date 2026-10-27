@@ -34,6 +34,13 @@
         <i class="bi bi-clock-history"></i> Histórico
       </a>
     </li>
+    {% if usuario_logado.perfil == 'admin' %}
+    <li class="nav-item">
+      <a class="nav-link" href="{{ url_for('auth.usuarios') }}">
+        <i class="bi bi-people"></i> Usuários
+      </a>
+    </li>
+    {% endif %}
     <li class="nav-item mt-3 border-top border-white border-opacity-10 pt-2">
       <a class="nav-link" href="/api/export/csv">
         <i class="bi bi-filetype-csv"></i> Exportar CSV
@@ -214,7 +221,7 @@
 
 <!-- ── Modal de detalhes ──────────────────────────────── -->
 <div class="modal fade" id="modalDetalhes" tabindex="-1">
-  <div class="modal-dialog modal-lg modal-dialog-centered">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header" style="background: var(--azul-radar);">
         <h5 class="modal-title text-white" id="modal-titulo"></h5>

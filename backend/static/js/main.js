@@ -262,7 +262,9 @@ function escaparHtml(valor) {
   })[caractere]);
 }
 
-function abrirModal(d) {
+async function abrirModal(d) {
+  const respostaDetalhe = await fetch(`/api/dispositivos/${d.id}`);
+  if (respostaDetalhe.ok) d = await respostaDetalhe.json();
   window._dispositivoAtual = d;
   const statusBadge = d.status === 'online'
     ? '<span class="badge badge-online px-2 py-1">● Online</span>'
@@ -351,12 +353,23 @@ function abrirModal(d) {
             <tr><td style="${tm}">Expiração informada pelo Windows</td>
                 <td style="${tc}"><strong>${escaparHtml(d.licenca_windows_expira)}</strong></td></tr>
             <tr><td style="${tm}">Licença cadastrada</td>
-                <td style="${tc}"><strong>${d.licenca_software}</strong></td></tr>
+                <td style="${tc}"><strong>${escaparHtml(d.licenca_software)}</strong></td></tr>
             <tr><td style="${tm}">Validade cadastrada</td>
                 <td style="${tc}"><strong>${d.licenca_expira}</strong></td></tr>
             <tr><td style="${tm}">Status</td>
                 <td>${badgeLicenca(d)}</td></tr>
           </table>
+        </div>
+      </div>
+
+      <div class="col-12">
+        <div class="info-card" style="${ti}">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="info-label mb-0"><i class="bi bi-box-seam me-1"></i>Softwares instalados</div>
+            ${window.RADAR_PODE_EDITAR ? `<button class="btn btn-outline-primary btn-sm" onclick="mostrarFormularioSoftware()"><i class="bi bi-plus-lg me-1"></i>Cadastrar software</button>` : ''}
+          </div>
+          <div id="lista-softwares">${htmlSoftwares(d.softwares_instalados || [])}</div>
+          <div id="formulario-software" class="mt-3" style="display:none"></div>
         </div>
       </div>
 
@@ -397,10 +410,13 @@ const camposEditaveis = [
   ['sistema_op', 'Sistema operacional'], ['processador', 'Processador'],
   ['memoria', 'Memória'], ['armazenamento', 'Armazenamento'],
   ['mac_address', 'MAC Address'], ['serial_number', 'Número de série'],
+  ['rede', 'Rede / andar'], ['interfaces', 'Interfaces', 'number'], ['uptime', 'Tempo ligado'],
   ['descricao', 'Descrição'], ['localizacao', 'Localização'], ['contato', 'Contato'],
   ['licenca_software', 'Software / licença cadastrada'],
   ['licenca_expira', 'Validade da licença', 'date'],
-  ['edicao_windows', 'Edição do Windows']
+  ['edicao_windows', 'Edição do Windows'],
+  ['status_ativacao_windows', 'Ativação do Windows'],
+  ['licenca_windows_expira', 'Expiração informada pelo Windows', 'date']
 ];
 
 function editarCamposManuais() {
@@ -415,7 +431,9 @@ function editarCamposManuais() {
         : `<input class="form-control" id="manual-${campo}" type="${tipo}">`}
     </div>`).join('');
   camposEditaveis.forEach(([campo]) => {
-    const valorAtual = campo === 'licenca_expira' ? d.licenca_expira_iso : d[campo];
+    const valorAtual = campo === 'licenca_expira' ? d.licenca_expira_iso
+      : campo === 'licenca_windows_expira' ? d.licenca_windows_expira_iso
+      : d[campo];
     const valor = valorAtual === '—' ? '' : (valorAtual ?? '');
     window._dadosOriginaisManual[campo] = String(valor);
     document.getElementById(`manual-${campo}`).value = valor;
@@ -455,6 +473,83 @@ async function salvarEdicaoManual() {
   carregarDispositivos();
   abrirModal(resultado);
   mostrarToast('Cadastro atualizado. Os campos manuais serão preservados nas próximas varreduras.');
+}
+
+function htmlSoftwares(lista) {
+  if (!lista.length) return '<p class="text-muted small mb-0">Nenhum software cadastrado manualmente.</p>';
+  return `<div class="table-responsive"><table class="table table-sm table-hover mb-0">
+    <thead><tr><th>Software</th><th>Fabricante</th><th>Versão</th><th>Licença</th><th>Expira em</th>${window.RADAR_PODE_EDITAR ? '<th>Ações</th>' : ''}</tr></thead>
+    <tbody>${lista.map(s => `<tr>
+      <td><strong>${escaparHtml(s.nome)}</strong>${s.observacao ? `<div class="small text-muted">${escaparHtml(s.observacao)}</div>` : ''}</td>
+      <td>${escaparHtml(s.fabricante || '—')}</td><td>${escaparHtml(s.versao || '—')}</td>
+      <td>${escaparHtml(s.tipo_licenca || '—')}</td>
+      <td>${s.expira_em ? escaparHtml(s.expira_em.split('-').reverse().join('/')) : '—'}</td>
+      ${window.RADAR_PODE_EDITAR ? `<td class="text-nowrap"><button class="btn btn-sm btn-outline-secondary me-1" title="Editar" onclick="mostrarFormularioSoftware(${s.id})"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-outline-danger" title="Excluir" onclick="excluirSoftware(${s.id})"><i class="bi bi-trash"></i></button></td>` : ''}
+    </tr>`).join('')}</tbody></table></div>`;
+}
+
+function mostrarFormularioSoftware(softwareId = null) {
+  const atual = window._dispositivoAtual;
+  const software = (atual.softwares_instalados || []).find(item => item.id === softwareId) || {};
+  const wrap = document.getElementById('formulario-software');
+  wrap.innerHTML = `<h6>${softwareId ? 'Editar software' : 'Cadastrar software'}</h6>
+    <div class="row g-2">
+      <div class="col-md-4"><label class="form-label" for="sw-nome">Nome *</label><input id="sw-nome" class="form-control" maxlength="150" required></div>
+      <div class="col-md-4"><label class="form-label" for="sw-fabricante">Fabricante</label><input id="sw-fabricante" class="form-control" maxlength="120"></div>
+      <div class="col-md-4"><label class="form-label" for="sw-versao">Versão</label><input id="sw-versao" class="form-control" maxlength="80"></div>
+      <div class="col-md-4"><label class="form-label" for="sw-licenca">Tipo de licença</label><input id="sw-licenca" class="form-control" maxlength="80" placeholder="Ex.: assinatura, perpétua"></div>
+      <div class="col-md-4"><label class="form-label" for="sw-expira">Validade</label><input id="sw-expira" type="date" class="form-control"></div>
+      <div class="col-md-12"><label class="form-label" for="sw-observacao">Observações</label><textarea id="sw-observacao" class="form-control" rows="2" maxlength="1000"></textarea></div>
+    </div>
+    <div class="d-flex justify-content-end gap-2 mt-3"><button class="btn btn-secondary btn-sm" onclick="cancelarFormularioSoftware()">Cancelar</button><button class="btn btn-primary btn-sm" onclick="salvarSoftware(${softwareId || 'null'})">Salvar software</button></div>`;
+  document.getElementById('sw-nome').value = software.nome || '';
+  document.getElementById('sw-fabricante').value = software.fabricante || '';
+  document.getElementById('sw-versao').value = software.versao || '';
+  document.getElementById('sw-licenca').value = software.tipo_licenca || '';
+  document.getElementById('sw-expira').value = software.expira_em || '';
+  document.getElementById('sw-observacao').value = software.observacao || '';
+  wrap.style.display = 'block';
+}
+
+function cancelarFormularioSoftware() {
+  const wrap = document.getElementById('formulario-software');
+  wrap.style.display = 'none';
+  wrap.innerHTML = '';
+}
+
+async function salvarSoftware(softwareId = null) {
+  const atual = window._dispositivoAtual;
+  const payload = {
+    nome: document.getElementById('sw-nome').value.trim(),
+    fabricante: document.getElementById('sw-fabricante').value.trim(),
+    versao: document.getElementById('sw-versao').value.trim(),
+    tipo_licenca: document.getElementById('sw-licenca').value.trim(),
+    expira_em: document.getElementById('sw-expira').value,
+    observacao: document.getElementById('sw-observacao').value.trim()
+  };
+  if (!payload.nome) { mostrarToast('Informe o nome do software.', 'bg-danger'); return; }
+  const endpoint = `/api/dispositivos/${atual.id}/softwares${softwareId ? `/${softwareId}` : ''}`;
+  const resposta = await fetch(endpoint, {
+    method: softwareId ? 'PUT' : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const resultado = await resposta.json();
+  if (!resposta.ok) { mostrarToast(resultado.erro || 'Não foi possível salvar o software.', 'bg-danger'); return; }
+  atual.softwares_instalados = resultado.softwares_instalados || [];
+  abrirModal(atual);
+  mostrarToast('Software salvo no cadastro do equipamento.');
+}
+
+async function excluirSoftware(softwareId) {
+  if (!confirm('Remover este software do inventário do equipamento?')) return;
+  const atual = window._dispositivoAtual;
+  const resposta = await fetch(`/api/dispositivos/${atual.id}/softwares/${softwareId}`, { method: 'DELETE' });
+  const resultado = await resposta.json();
+  if (!resposta.ok) { mostrarToast(resultado.erro || 'Não foi possível remover o software.', 'bg-danger'); return; }
+  atual.softwares_instalados = resultado.softwares_instalados || [];
+  abrirModal(atual);
+  mostrarToast('Software removido do cadastro.');
 }
 
 // ── Tabela de dispositivos ─────────────────────────────
