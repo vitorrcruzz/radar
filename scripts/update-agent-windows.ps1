@@ -1,20 +1,28 @@
 #Requires -RunAsAdministrator
 [CmdletBinding()]
 param(
-    [string]$ProjectPath = (Split-Path -Parent $PSScriptRoot)
+    [string]$ProjectPath
 )
 
 $ErrorActionPreference = 'Stop'
+if (-not $ProjectPath) {
+    $scriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
+    $ProjectPath = Split-Path -Parent $scriptDirectory
+}
+
 $taskName = 'RADAR Agent'
 $installRoot = Join-Path $env:ProgramFiles 'RADAR'
-$sourceFile = Join-Path $ProjectPath 'collector\host_inventory.py'
-$targetDirectory = Join-Path $installRoot 'src\collector'
-$targetFile = Join-Path $targetDirectory 'host_inventory.py'
+$sourceAgent = Join-Path $ProjectPath 'agent'
+$sourceCollector = Join-Path $ProjectPath 'collector'
+$sourceRoot = Join-Path $installRoot 'src'
+$venvPython = Join-Path $installRoot 'venv\Scripts\python.exe'
 
-if (-not (Test-Path -LiteralPath $sourceFile -PathType Leaf)) {
-    throw "Coletor atualizado não encontrado: $sourceFile. Informe a raiz do projeto com -ProjectPath."
+if (-not (Test-Path -LiteralPath (Join-Path $sourceAgent 'client.py') -PathType Leaf) -or
+    -not (Test-Path -LiteralPath (Join-Path $sourceCollector 'host_inventory.py') -PathType Leaf)) {
+    throw "Código atualizado do agente não encontrado em $ProjectPath. Informe a raiz do projeto com -ProjectPath."
 }
-if (-not (Test-Path -LiteralPath $targetDirectory -PathType Container)) {
+if (-not (Test-Path -LiteralPath $sourceRoot -PathType Container) -or
+    -not (Test-Path -LiteralPath $venvPython -PathType Leaf)) {
     throw "Agente RADAR não encontrado em $installRoot. Instale o agente antes de atualizá-lo."
 }
 $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
@@ -35,7 +43,7 @@ if ($task.State -eq 'Running') {
 }
 
 try {
-    Copy-Item -LiteralPath $sourceFile -Destination $targetFile -Force
+    Copy-Item -Path $sourceAgent, $sourceCollector -Destination $sourceRoot -Recurse -Force
 }
 finally {
     # Reativa a coleta mesmo se a cópia falhar.
@@ -43,5 +51,6 @@ finally {
 }
 
 Write-Host 'Agente RADAR atualizado e reiniciado.'
-Write-Host "Arquivo atualizado: $targetFile"
+Write-Host "Código atualizado em: $sourceRoot"
+Write-Host 'Identidade e token do agente preservados em ProgramData\RADAR.'
 Write-Host "Tarefa: $taskName"

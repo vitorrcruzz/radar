@@ -3,7 +3,7 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$ServerUrl,
-    [string]$ProjectPath = (Split-Path -Parent $PSScriptRoot),
+    [string]$ProjectPath,
     [string]$PythonPath,
     [string]$CaBundle,
     [ValidateRange(60, 86400)]
@@ -12,6 +12,14 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+if (-not $ProjectPath) {
+    # Resolve the repository root after script execution begins. Parameter
+    # default expressions may run before $PSScriptRoot is populated in some
+    # Windows PowerShell invocation contexts.
+    $scriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
+    $ProjectPath = Split-Path -Parent $scriptDirectory
+}
+
 $taskName = 'RADAR Agent'
 $installRoot = Join-Path $env:ProgramFiles 'RADAR'
 $sourceRoot = Join-Path $installRoot 'src'

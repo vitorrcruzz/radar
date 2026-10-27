@@ -107,6 +107,12 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 Para HTTPS com CA interna confiável, omita `-AllowInsecureHttp` e informe `-CaBundle "C:\caminho\empresa-ca.pem"`. O script pedirá o token inicial de registro sem exibi-lo, instalará as dependências em um ambiente virtual separado e criará a tarefa `RADAR Agent`. O instalador não baixa nem instala o Python: instale-o previamente (Python 3.10 ou superior; Python 3.14 é aceito) e informe o executável com `-PythonPath`, por exemplo `-PythonPath "C:\Program Files\Python314\python.exe"`. O arquivo de estado e o log ficam em `%ProgramData%\RADAR`; acesso limitado a `SYSTEM` e Administradores. Para verificar a tarefa, use `Get-ScheduledTask -TaskName 'RADAR Agent'`; o log pode ser lido com `Get-Content "$env:ProgramData\RADAR\agent.log" -Wait`.
 
+Para atualizar o código em um computador que já tem o agente instalado, não execute o instalador nem registre o agente novamente. Copie o código atualizado para `C:\radar` e execute o atualizador como administrador; ele para e reinicia a tarefa e preserva o token existente:
+
+```powershell
+& "C:\radar\scripts\update-agent-windows.ps1" -ProjectPath "C:\radar"
+```
+
 No Linux com systemd, execute como root (por exemplo, com `sudo`). O serviço roda sob a conta interna `root` para ler os identificadores de hardware locais; não cria outro usuário nem guarda senha. Para HTTPS:
 
 ```bash
