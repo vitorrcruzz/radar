@@ -1,0 +1,12 @@
+flowchart TB
+    W[Computadores Windows e Linux com agente] -->|HTTPS e JSON| A[API de agentes com token e regras de rede]
+    S[Dispositivos com SNMP] -->|Respostas UDP 161| C[Coletor PySNMP e agendador]
+    N[Navegador do administrador ou usuário] -->|HTTPS e sessão| F[Flask com painel e cadastros]
+    T[Tailscale Funnel opcional] --> F
+    subgraph Servidor RADAR no piloto
+      A --> D[SQLAlchemy e SQLite persistente]
+      C --> D
+      F <--> D
+    end
+    I[ICMP opcional] -.-> C
+    R[WinRM complementar de laboratório] -.-> C

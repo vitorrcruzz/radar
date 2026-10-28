@@ -13,8 +13,7 @@ certs/
 
 # Local application data
 instance/
-database/*.db
-database/*.sqlite3
+database/
 exports/*
 !exports/.gitkeep
 

@@ -174,7 +174,7 @@ if (-not (Test-Path (Join-Path $ProjectPath 'agent\client.py')) -or
 }
 if ($ServerUrl -notmatch '^https://') {
     if (-not $AllowInsecureHttp -or $ServerUrl -notmatch '^http://') {
-        throw 'Use HTTPS. HTTP somente é aceito no laboratório com -AllowInsecureHttp.'
+        throw 'Use HTTPS. HTTP somente aceito no laboratorio com -AllowInsecureHttp.'
     }
     Write-Warning 'HTTP esta sem criptografia. Use esta opçao somente no laboratorio domestico isolado.'
 }
@@ -184,18 +184,18 @@ Copy-Item -Path (Join-Path $ProjectPath 'agent'), (Join-Path $ProjectPath 'colle
 
 if (-not (Test-Path $venvPython)) {
     & $PythonPath -m venv (Join-Path $installRoot 'venv')
-    if ($LASTEXITCODE -ne 0) { throw 'Não foi possível criar o ambiente virtual do agente.' }
+    if ($LASTEXITCODE -ne 0) { throw 'Nao foi possivel criar o ambiente virtual do agente.' }
 }
 & $venvPython -m pip install -r (Join-Path $ProjectPath 'agent-requirements.txt')
-if ($LASTEXITCODE -ne 0) { throw 'Falha ao instalar as dependências do agente.' }
+if ($LASTEXITCODE -ne 0) { throw 'Falha ao instalar as dependencias do agente.' }
 
 # O estado contém o token individual. Somente SYSTEM e Administradores podem acessá-lo.
 & icacls.exe $stateRoot /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' | Out-Null
-if ($LASTEXITCODE -ne 0) { throw 'Não foi possível restringir as permissões de ProgramData\RADAR.' }
+if ($LASTEXITCODE -ne 0) { throw 'Nao foi possivel restringir as permissoes de ProgramData\RADAR.' }
 
 $caPath = $null
 if ($CaBundle) {
-    if (-not (Test-Path -LiteralPath $CaBundle -PathType Leaf)) { throw "CA não encontrada: $CaBundle" }
+    if (-not (Test-Path -LiteralPath $CaBundle -PathType Leaf)) { throw "CA nao encontrada: $CaBundle" }
     $caPath = Join-Path $stateRoot 'radar-ca.pem'
     Copy-Item -LiteralPath $CaBundle -Destination $caPath -Force
 }

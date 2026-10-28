@@ -30,7 +30,7 @@ def _validar_url(url, permitir_http):
     if partes.scheme not in {"https", "http"} or not partes.netloc:
         raise ValueError("Informe uma URL completa, como https://radar.empresa.local.")
     if partes.scheme != "https" and not permitir_http:
-        raise ValueError("HTTPS é obrigatório. HTTP só é permitido explicitamente em laboratório isolado.")
+        raise ValueError("HTTPS e obrigatório. HTTP so e permitido explicitamente em laboratorio isolado.")
     return url.rstrip("/")
 
 
@@ -78,7 +78,7 @@ def _enviar(sessao, estado, url, dados):
     )
     if not resposta.ok:
         try:
-            detalhe = resposta.json().get("erro", "erro não especificado")
+            detalhe = resposta.json().get("erro", "erro nao especificado")
         except (ValueError, AttributeError):
             detalhe = f"HTTP {resposta.status_code}"
         raise RuntimeError(f"Servidor recusou a coleta: {detalhe}")
@@ -89,10 +89,10 @@ def registrar(args):
     url = _validar_url(args.server_url, args.allow_insecure_http)
     ca_bundle = str(Path(args.ca_bundle).expanduser().resolve()) if args.ca_bundle else None
     if ca_bundle and not Path(ca_bundle).is_file():
-        raise FileNotFoundError(f"Certificado CA não encontrado: {ca_bundle}")
+        raise FileNotFoundError(f"Certificado CA nao encontrado: {ca_bundle}")
     segredo = os.getenv("RADAR_AGENT_ENROLLMENT_TOKEN") or getpass.getpass("Token de registro RADAR: ")
     if not segredo.strip():
-        raise ValueError("O token de registro não pode ficar vazio.")
+        raise ValueError("O token de registro nao pode ficar vazio.")
 
     caminho = Path(args.state_file).expanduser() if args.state_file else _caminho_estado()
     agente_id = None
@@ -116,7 +116,7 @@ def registrar(args):
     )
     if not resposta.ok:
         try:
-            detalhe = resposta.json().get("erro", "erro não especificado")
+            detalhe = resposta.json().get("erro", "erro nao especificado")
         except (ValueError, AttributeError):
             detalhe = f"HTTP {resposta.status_code}"
         raise RuntimeError(f"Registro recusado: {detalhe}")
@@ -130,7 +130,7 @@ def registrar(args):
     }
     _salvar_estado(caminho, estado)
     print(f"Agente registrado: {estado['agent_id']}")
-    print(f"Configuração local gravada em: {caminho}")
+    print(f"Configuraçao local gravada em: {caminho}")
     print("Guarde uma cópia segura da configuração; ela contém o token individual deste agente.")
 
 

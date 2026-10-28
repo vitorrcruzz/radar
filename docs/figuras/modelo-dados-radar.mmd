@@ -1,0 +1,49 @@
+erDiagram
+    dispositivos ||--o{ campos_manuais_dispositivo : possui
+    dispositivos ||--o{ softwares_instalados : possui
+    dispositivos ||--o| agentes : vincula
+    agentes ||--o{ coletas_agente : registra
+    usuarios {
+      int id PK
+      string email UK
+      string senha_hash
+      string perfil
+      boolean ativo
+    }
+    dispositivos {
+      int id PK
+      string ip UK
+      string hostname
+      string status
+    }
+    campos_manuais_dispositivo {
+      int id PK
+      int dispositivo_id FK
+      string campo
+      string valor
+    }
+    softwares_instalados {
+      int id PK
+      int dispositivo_id FK
+      string nome
+      string versao
+      date expira_em
+    }
+    agentes {
+      string id PK
+      int dispositivo_id FK
+      string token_hash
+      datetime ultima_coleta
+    }
+    coletas_agente {
+      int id PK
+      string agente_id FK
+      string dados_json
+      datetime recebido_em
+    }
+    historico_varreduras {
+      int id PK
+      datetime iniciado_em
+      datetime finalizado_em
+      int total_escaneado
+    }

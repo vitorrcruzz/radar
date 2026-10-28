@@ -125,6 +125,11 @@ class Dispositivo(db.Model):
             else:
                 dados[campo_manual.campo] = valor_manual
             dados["fontes_manuais"].append(campo_manual.campo)
+        if dados["tipo"] in {"Roteador", "Switch", "Access Point", "Camera IP", "Nobreak", "Impressora"}:
+            dados["edicao_windows"] = "Não se aplica"
+            dados["status_ativacao_windows"] = "Não se aplica"
+            dados["licenca_windows_expira"] = "Não se aplica"
+            dados["licenca_windows_expira_iso"] = ""
         if incluir_software:
             dados["softwares_instalados"] = [software.to_dict() for software in self.softwares_instalados]
         return dados

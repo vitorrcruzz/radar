@@ -61,7 +61,7 @@ def detectar_tipo(dados: dict[str, Any]) -> str:
 
     if "cisco" in descricao or "catalyst" in descricao or "sw-" in hostname:
         return "Switch"
-    if "routeros" in descricao or "mikrotik" in descricao or "rtr-" in hostname:
+    if any(termo in descricao for termo in ("routeros", "mikrotik", "vpn router", "multi-wan router")) or "rtr-" in hostname:
         return "Roteador"
     if "unifi" in descricao or "ubiquiti" in descricao or "ap-" in hostname:
         return "Access Point"
@@ -89,11 +89,13 @@ def detectar_tipo(dados: dict[str, Any]) -> str:
 
 def formatar_uptime(centisegundos: str | None) -> str:
     try:
-        segundos = int(centisegundos or 0) // 100
+        if centisegundos is None:
+            return "—"
+        segundos = int(centisegundos) // 100
         dias = segundos // 86400
         horas = (segundos % 86400) // 3600
         minutos = (segundos % 3600) // 60
-        return f"{dias}d {horas}h {minutos}m"
+        return f"{dias}d {horas}h {minutos}m {segundos % 60}s"
     except (TypeError, ValueError):
         return "—"
 
@@ -551,7 +553,29 @@ async def _consultar_dispositivo(
             dados.get("descricao"),
         )
 
-        dados["uptime_fmt"] = formatar_uptime(dados.get("uptime"))
+        # hrSystemUptime mede o sistema; sysUpTime mede somente o agente SNMP.
+        # Consulta separada para não comprometer a coleta em MIBs sem esse OID.
+        uptime_sistema = None
+        try:
+            erro_uptime, estado_uptime, _, valores_uptime = await get_cmd(
+                engine, autenticacao, destino, ContextData(),
+                ObjectType(ObjectIdentity("1.3.6.1.2.1.25.1.1.0")),
+            )
+            if not erro_uptime and not estado_uptime and valores_uptime:
+                valor = _valor_texto(valores_uptime[0])
+                if valor is not None and int(valor) >= 0:
+                    uptime_sistema = valor
+        except Exception:
+            pass
+        if uptime_sistema is not None:
+            dados["uptime"] = uptime_sistema
+            dados["uptime_fonte"] = "hrSystemUptime"
+            dados["uptime_fmt"] = formatar_uptime(uptime_sistema)
+        else:
+            dados["uptime_fonte"] = "sysUpTime"
+            dados["uptime_fmt"] = formatar_uptime(dados.get("uptime"))
+            if dados["uptime_fmt"] != "—":
+                dados["uptime_fmt"] += " (serviço SNMP)"
         dados["tipo"] = detectar_tipo(dados)
 
         resultado["status"] = "online"

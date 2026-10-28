@@ -9,6 +9,14 @@ from backend.inventory_query import consulta_dispositivos_com_coleta
 
 devices_bp = Blueprint("devices", __name__)
 
+
+def _tipo_efetivo():
+    tipo_manual = db.select(CampoManualDispositivo.valor).where(
+        CampoManualDispositivo.dispositivo_id == Dispositivo.id,
+        CampoManualDispositivo.campo == "tipo",
+    ).correlate(Dispositivo).scalar_subquery()
+    return db.func.coalesce(db.func.nullif(db.func.trim(tipo_manual), ""), Dispositivo.tipo, "Desconhecido")
+
 LIMITES_CAMPOS_MANUAIS = {
     "hostname": 100,
     "tipo": 50,
@@ -70,7 +78,7 @@ def listar_dispositivos():
         selectinload(Dispositivo.campos_manuais)
     )
     if tipo:
-        query = query.filter(Dispositivo.tipo == tipo)
+        query = query.filter(_tipo_efetivo() == tipo)
     if status:
         query = query.filter(Dispositivo.status == status)
     dispositivos = query.order_by(Dispositivo.ip).all()
@@ -224,10 +232,11 @@ def estatisticas():
     online  = inventariados.filter_by(status="online").count()
     offline = inventariados.filter_by(status="offline").count()
 
+    tipo_efetivo = _tipo_efetivo()
     por_tipo = inventariados.with_entities(
-        Dispositivo.tipo,
+        tipo_efetivo,
         db.func.count(Dispositivo.id)
-    ).group_by(Dispositivo.tipo).all()
+    ).group_by(tipo_efetivo).all()
 
     ultima = HistoricoVarredura.query.order_by(
         HistoricoVarredura.id.desc()
