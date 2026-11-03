@@ -24,7 +24,9 @@ class Dispositivo(db.Model):
     __tablename__ = "dispositivos"
 
     id               = db.Column(db.Integer, primary_key=True)
-    ip               = db.Column(db.String(15), unique=True, nullable=False)
+    # DHCP pode reutilizar o endereço de um ativo offline. Nesse caso o ativo
+    # permanece no inventário, sem IP atual, até receber uma nova coleta.
+    ip               = db.Column(db.String(15), unique=True, nullable=True)
     hostname         = db.Column(db.String(100))
     tipo             = db.Column(db.String(50))
     modelo           = db.Column(db.String(150))
@@ -77,7 +79,7 @@ class Dispositivo(db.Model):
         dias = self.dias_para_expirar()
         dados = {
             "id":               self.id,
-            "ip":               self.ip,
+            "ip":               self.ip or "Sem IP atual",
             "hostname":         self.hostname         or "—",
             "tipo":             self.tipo             or "Desconhecido",
             "modelo":           self.modelo           or "—",
@@ -133,6 +135,17 @@ class Dispositivo(db.Model):
         if incluir_software:
             dados["softwares_instalados"] = [software.to_dict() for software in self.softwares_instalados]
         return dados
+
+
+class HistoricoIP(db.Model):
+    __tablename__ = "historico_ips"
+
+    id = db.Column(db.Integer, primary_key=True)
+    dispositivo_id = db.Column(db.Integer, db.ForeignKey("dispositivos.id"), nullable=False, index=True)
+    ip_anterior = db.Column(db.String(15))
+    ip_novo = db.Column(db.String(15))
+    origem = db.Column(db.String(40), nullable=False)
+    alterado_em = db.Column(db.DateTime, default=datetime.now, nullable=False)
 
 
 class CampoManualDispositivo(db.Model):

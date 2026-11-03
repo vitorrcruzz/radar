@@ -86,6 +86,10 @@ def criar_app():
             with db.engine.begin() as conexao:
                 for nome, tipo in faltantes.items():
                     conexao.execute(text(f"ALTER TABLE dispositivos ADD COLUMN {nome} {tipo}"))
+        from backend.migrations import permitir_dispositivo_sem_ip
+        backup_ip = permitir_dispositivo_sem_ip(database_path)
+        if backup_ip:
+            app.logger.info("Migração de IP concluída; backup em %s", backup_ip)
         # from backend.seed import popular_dispositivos_offline
         # popular_dispositivos_offline()
 

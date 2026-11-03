@@ -2,6 +2,7 @@ let tabelaDispositivos = null;
 let tabelaHistorico    = null;
 let graficoPie         = null;
 let graficoLinha       = null;
+let requisicaoDispositivos = 0;
 
 // Variáveis de tema para uso global
 let _t  = false;  // tema escuro ativo?
@@ -195,6 +196,7 @@ function mostrarToast(msg, cor = 'bg-success') {
 // ── Estatísticas e gráficos ────────────────────────────
 async function carregarStats() {
   const r = await fetch('/api/stats');
+  if (!r.ok) return;
   const d = await r.json();
 
   document.getElementById('stat-total').textContent   = d.total;
@@ -213,7 +215,15 @@ async function carregarStats() {
   const values = d.por_tipo.map(t => t.quantidade);
   const cores  = ['#2E75B6','#28a745','#fd7e14','#6f42c1','#dc3545','#17a2b8','#ffc107','#20c997'];
 
-  if (graficoPie) graficoPie.destroy();
+  if (graficoPie) {
+    if (JSON.stringify(graficoPie.data.labels) !== JSON.stringify(labels) ||
+        JSON.stringify(graficoPie.data.datasets[0].data) !== JSON.stringify(values)) {
+      graficoPie.data.labels = labels;
+      graficoPie.data.datasets[0].data = values;
+      graficoPie.update('none');
+    }
+    return;
+  }
   graficoPie = new Chart(document.getElementById('grafico-tipos'), {
     type: 'doughnut',
     data: {
@@ -222,21 +232,34 @@ async function carregarStats() {
     },
     options: {
       plugins: { legend: { position: 'right', labels: { font: { size: 12 } } } },
+      responsive: true,
+      maintainAspectRatio: false,
       cutout: '60%',
     }
   });
 }
 
 async function carregarGraficoHistorico() {
-  const r = await fetch('/api/historico');
+  const r = await fetch('/api/historico/recentes');
+  if (!r.ok) return;
   const lista = await r.json();
-  const recentes = lista.slice(0, 10).reverse();
+  const recentes = lista.reverse();
 
   const labels  = recentes.map(h => h.iniciado_em.slice(11, 16));
   const online  = recentes.map(h => h.total_online);
   const offline = recentes.map(h => h.total_offline);
 
-  if (graficoLinha) graficoLinha.destroy();
+  if (graficoLinha) {
+    if (JSON.stringify(graficoLinha.data.labels) !== JSON.stringify(labels) ||
+        JSON.stringify(graficoLinha.data.datasets[0].data) !== JSON.stringify(online) ||
+        JSON.stringify(graficoLinha.data.datasets[1].data) !== JSON.stringify(offline)) {
+      graficoLinha.data.labels = labels;
+      graficoLinha.data.datasets[0].data = online;
+      graficoLinha.data.datasets[1].data = offline;
+      graficoLinha.update('none');
+    }
+    return;
+  }
   graficoLinha = new Chart(document.getElementById('grafico-historico'), {
     type: 'bar',
     data: {
@@ -382,7 +405,7 @@ async function abrirModal(d) {
             <tr><td style="${tm}">Contato</td>
                 <td style="${tm}"><small>${escaparHtml(d.contato)}</small></td></tr>
             <tr><td style="${tm}">Última varredura</td>
-                <td style="${tm}"><small>${d.ultima_vez}</small></td></tr>
+                <td style="${tm}"><small>${escaparHtml(d.ultima_vez || '—')}</small></td></tr>
           </table>
         </div>
       </div>
@@ -581,6 +604,7 @@ function badgeLicenca(d) {
 
 
 async function carregarDispositivos() {
+  const requisicao = ++requisicaoDispositivos;
   const tipo   = document.getElementById('filtro-tipo').value;
   const status = document.getElementById('filtro-status').value;
   let url = '/api/dispositivos?';
@@ -588,15 +612,11 @@ async function carregarDispositivos() {
   if (status) url += `status=${status}`;
 
   const r = await fetch(url);
+  if (!r.ok) return;
   const lista = await r.json();
-
-  if (tabelaDispositivos) {
-    tabelaDispositivos.destroy();
-    tabelaDispositivos = null;
-    document.querySelector('#tabela-dispositivos tbody').innerHTML = '';
-  }
-
-  const tbody = document.querySelector('#tabela-dispositivos tbody');
+  if (requisicao !== requisicaoDispositivos) return;
+  const tbody = document.createElement('tbody');
+  window._dispositivos = {};
   lista.forEach((d, idx) => {
     const badge = d.status === 'online'
       ? '<span class="badge badge-online px-2 py-1">● Online</span>'
@@ -622,9 +642,17 @@ async function carregarDispositivos() {
         <td><small>${escaparHtml(d.armazenamento)}</small></td>
         <td>${badgeLicenca(d)}</td>
         <td>${d.uptime}</td>
-        <td><small class="text-muted">${d.ultima_vez}</small></td>
+        <td class="ultima-varredura"><span>${escaparHtml(d.ultima_vez || '—')}</span></td>
       </tr>`;
   });
+
+  if (tabelaDispositivos) {
+    tabelaDispositivos.clear().rows.add(Array.from(tbody.children)).draw(false);
+    const info = tabelaDispositivos.page.info();
+    if (info.pages && info.page >= info.pages) tabelaDispositivos.page(info.pages - 1).draw(false);
+    return;
+  }
+  document.querySelector('#tabela-dispositivos tbody').replaceChildren(...Array.from(tbody.children));
 
   tabelaDispositivos = new DataTable('#tabela-dispositivos', {
     language: { url: 'https://cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json' },
@@ -644,37 +672,36 @@ async function carregarDispositivos() {
 function filtrarTabela() { carregarDispositivos(); }
 
 // ── Tabela histórico ───────────────────────────────────
-async function carregarHistorico() {
-  const r = await fetch('/api/historico');
-  const lista = await r.json();
-
+function carregarHistorico() {
   if (tabelaHistorico) {
-    tabelaHistorico.destroy();
-    tabelaHistorico = null;
-    document.querySelector('#tabela-historico tbody').innerHTML = '';
+    tabelaHistorico.ajax.reload(null, false);
+    return;
   }
-
-  const tbody = document.querySelector('#tabela-historico tbody');
-  lista.forEach(h => {
-    const origem = h.disparado_por === 'manual'
-      ? '<span class="badge bg-info text-dark">Manual</span>'
-      : '<span class="badge bg-secondary">Automático</span>';
-    tbody.innerHTML += `
-      <tr>
-        <td>${h.id}</td>
-        <td>${h.iniciado_em}</td>
-        <td>${h.finalizado_em}</td>
-        <td class="text-center">${h.total_escaneado}</td>
-        <td class="text-center text-success fw-bold">${h.total_online}</td>
-        <td class="text-center text-danger">${h.total_offline}</td>
-        <td>${origem}</td>
-      </tr>`;
-  });
-
+  const texto = valor => escaparHtml(valor ?? '—');
   tabelaHistorico = new DataTable('#tabela-historico', {
     language: { url: 'https://cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json' },
+    processing: true,
+    serverSide: true,
+    deferRender: true,
+    searchDelay: 350,
     pageLength: 15,
+    lengthMenu: [10, 15, 25, 50],
     order: [[0, 'desc']],
+    ajax: { url: '/api/historico', type: 'GET' },
+    columns: [
+      { data: 'id', render: texto },
+      { data: 'iniciado_em', render: texto },
+      { data: 'finalizado_em', render: texto },
+      { data: 'total_escaneado', className: 'text-center', render: texto },
+      { data: 'total_online', className: 'text-center text-success fw-bold', render: texto },
+      { data: 'total_offline', className: 'text-center text-danger', render: texto },
+      { data: 'disparado_por', render: (origem, tipo) => {
+        if (tipo !== 'display') return origem;
+        return origem === 'manual'
+          ? '<span class="badge bg-info text-dark">Manual</span>'
+          : '<span class="badge bg-secondary">Automático</span>';
+      } }
+    ],
     initComplete: function() {
       corrigirEstilosDataTables();
       setTimeout(aplicarTemaSelect, 50);
@@ -719,8 +746,23 @@ async function dispararVarredura() {
   await carregarStats();
   await carregarGraficoHistorico();
 
+  let atualizacaoEmAndamento = false;
   setInterval(async () => {
-    await carregarStats();
-    await carregarGraficoHistorico();
+    if (document.hidden || atualizacaoEmAndamento) return;
+    atualizacaoEmAndamento = true;
+    try {
+      await carregarStats();
+      if (document.getElementById('secao-dashboard').style.display !== 'none') {
+        await carregarGraficoHistorico();
+      }
+      if (document.getElementById('secao-dispositivos').style.display !== 'none' &&
+          !document.querySelector('.modal.show')) {
+        await carregarDispositivos();
+      }
+    } catch (erro) {
+      console.warn('Atualização periódica indisponível; será tentada novamente.', erro);
+    } finally {
+      atualizacaoEmAndamento = false;
+    }
   }, 30000);
 })();

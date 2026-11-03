@@ -12,9 +12,11 @@ import uuid
 from datetime import date, datetime
 
 from flask import Blueprint, jsonify, request
+from sqlalchemy.exc import IntegrityError
 
 from backend.database import db
-from backend.models import Agente, ColetaAgente, Dispositivo
+from backend.models import Agente, CampoManualDispositivo, ColetaAgente, Dispositivo, HistoricoIP, SoftwareInstalado
+from backend.device_identity import buscar_por_identidade, definir_ip, liberar_ocupante_antigo, validar_identidade_no_ip
 from backend.network_labels import identificar_rede
 
 agents_bp = Blueprint("agents", __name__)
@@ -142,6 +144,32 @@ def _validar_payload(payload):
     return {"agent_id": agente_id, "plataforma": plataforma, "dados": normalizados}, None
 
 
+def _host_apenas_descoberto(dispositivo):
+    """Só libera placeholders ICMP sem identidade, inventário ou vínculos."""
+    if dispositivo.tipo != "Host sem coleta":
+        return False
+    if Agente.query.filter_by(dispositivo_id=dispositivo.id).first():
+        return False
+    if CampoManualDispositivo.query.filter_by(dispositivo_id=dispositivo.id).first():
+        return False
+    if SoftwareInstalado.query.filter_by(dispositivo_id=dispositivo.id).first():
+        return False
+    if HistoricoIP.query.filter_by(dispositivo_id=dispositivo.id).first():
+        return False
+    campos = (
+        "hostname", "modelo", "sistema_op", "armazenamento", "memoria",
+        "processador", "mac_address", "serial_number", "localizacao", "contato",
+        "uptime", "licenca_software", "licenca_expira", "edicao_windows",
+        "status_ativacao_windows", "licenca_windows_expira",
+    )
+    if any(getattr(dispositivo, campo) not in (None, "") for campo in campos):
+        return False
+    return dispositivo.interfaces in (None, 0) and dispositivo.descricao in (
+        None, "",
+        "Host identificado por ICMP; inventário detalhado exige agente RADAR ou resposta SNMP.",
+    )
+
+
 def _aplicar_coleta(agente, coleta):
     dados = coleta["dados"]
     dispositivo = agente.dispositivo
@@ -150,9 +178,29 @@ def _aplicar_coleta(agente, coleta):
         Dispositivo.ip == dados["ip"], Dispositivo.id != dispositivo.id
     ).first()
     if conflito:
-        raise ValueError("O endereço IP informado já está associado a outro dispositivo.")
+        if not _host_apenas_descoberto(conflito):
+            origem = ipaddress.ip_address(request.remote_addr or "0.0.0.0")
+            if isinstance(origem, ipaddress.IPv6Address) and origem.ipv4_mapped:
+                origem = origem.ipv4_mapped
+            try:
+                liberar_ocupante_antigo(conflito, dispositivo, dados, "agente",
+                                       str(origem) == dados["ip"])
+            except ValueError as erro:
+                logger.warning(
+                    "Conflito de IP do agente: origem=%s ip_informado=%s agente_id=%s "
+                    "dispositivo_id=%s hostname_informado=%s ocupado_por_id=%s hostname_cadastrado=%s motivo=%s",
+                    request.remote_addr, dados["ip"], agente.id, dispositivo.id,
+                    dados.get("hostname"), conflito.id, conflito.hostname, erro,
+                )
+                raise
+        else:
+            # A exclusão e a atualização pertencem à mesma transação.
+            logger.info("Liberando IP de host sem coleta: ip=%s placeholder_id=%s agente_id=%s",
+                        dados["ip"], conflito.id, agente.id)
+            db.session.delete(conflito)
+            db.session.flush()
 
-    dispositivo.ip = dados["ip"]
+    definir_ip(dispositivo, dados["ip"], "agente")
     # A etiqueta segue o IP local informado pelo agente. O IP de origem HTTP
     # pode ser de um roteador/NAT entre o equipamento e o servidor.
     etiqueta_rede = identificar_rede(dados["ip"])
@@ -216,7 +264,16 @@ def registrar_agente():
 
     agente = db.session.get(Agente, coleta["agent_id"])
     if agente is None:
-        dispositivo = Dispositivo.query.filter_by(ip=coleta["dados"]["ip"]).first()
+        try:
+            dispositivo = buscar_por_identidade(coleta["dados"])
+        except ValueError as erro:
+            return jsonify({"erro": str(erro)}), 409
+        if dispositivo is None:
+            dispositivo = Dispositivo.query.filter_by(ip=coleta["dados"]["ip"]).first()
+            try:
+                validar_identidade_no_ip(dispositivo, coleta["dados"])
+            except ValueError as erro:
+                return jsonify({"erro": str(erro)}), 409
         if dispositivo is None:
             dispositivo = Dispositivo(ip=coleta["dados"]["ip"])
             db.session.add(dispositivo)
@@ -225,20 +282,15 @@ def registrar_agente():
             return jsonify({"erro": "Este ativo já possui um agente registrado com outra identidade."}), 409
         agente = Agente(
             id=coleta["agent_id"],
-            dispositivo_id=dispositivo.id,
+            # O vínculo precisa estar disponível antes do primeiro flush:
+            # _aplicar_coleta usa agente.dispositivo já no registro inicial.
+            dispositivo=dispositivo,
             token_hash="",
             plataforma=coleta["plataforma"],
         )
         db.session.add(agente)
     elif not agente.ativo:
         return jsonify({"erro": "Este agente foi desativado."}), 403
-
-    conflito = Dispositivo.query.filter(
-        Dispositivo.ip == coleta["dados"]["ip"],
-        Dispositivo.id != agente.dispositivo_id,
-    ).first()
-    if conflito:
-        return jsonify({"erro": "O endereço IP já pertence a outro ativo; solicite a resolução ao administrador."}), 409
 
     token = secrets.token_urlsafe(32)
     agente.token_hash = _hash_token(token)
@@ -248,6 +300,9 @@ def registrar_agente():
     except ValueError as erro:
         db.session.rollback()
         return jsonify({"erro": str(erro)}), 409
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"erro": "Conflito simultâneo de cadastro. Tente novamente."}), 409
 
     return jsonify({"agent_id": agente.id, "token": token, "mensagem": "Agente registrado."}), 201
 
@@ -256,9 +311,12 @@ def registrar_agente():
 def receber_inventario():
     token = _token_bearer()
     if not token:
+        logger.warning("Coleta de agente recusada: origem=%s motivo=token_ausente", request.remote_addr)
         return jsonify({"erro": "Token do agente obrigatório."}), 401
     agente = Agente.query.filter_by(token_hash=_hash_token(token)).first()
     if agente is None or not agente.ativo or not hmac.compare_digest(agente.token_hash, _hash_token(token)):
+        logger.warning("Coleta de agente recusada: origem=%s motivo=%s", request.remote_addr,
+                       "token_desconhecido" if agente is None else "agente_desativado")
         return jsonify({"erro": "Token do agente inválido ou revogado."}), 401
     if not _origem_agente_autorizada():
         logger.warning("Coleta de agente recusada; origem fora das redes permitidas: %s", request.remote_addr)
@@ -284,17 +342,17 @@ def receber_inventario():
         db.session.commit()
         return jsonify({"erro": "O IP do equipamento não pertence às redes autorizadas."}), 403
 
-    logger.info(
-        "Coleta de agente aceita: origem=%s ip_informado=%s",
-        request.remote_addr,
-        coleta["dados"]["ip"],
-    )
-
     try:
         _aplicar_coleta(agente, coleta)
         db.session.commit()
     except ValueError as erro:
         db.session.rollback()
         return jsonify({"erro": str(erro)}), 409
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"erro": "Conflito simultâneo de cadastro. Tente novamente."}), 409
+
+    logger.info("Coleta de agente aceita: origem=%s ip_informado=%s agente_id=%s",
+                request.remote_addr, coleta["dados"]["ip"], agente.id)
 
     return jsonify({"mensagem": "Inventário recebido.", "ultima_coleta": agente.ultima_coleta.isoformat()}), 200

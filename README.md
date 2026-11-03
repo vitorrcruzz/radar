@@ -12,6 +12,8 @@ A referência consolidada para o funcionamento e os limites atuais é:
 - [Documento Word para complementar o TCC](docs/Documentacao_RADAR_2026-10-27.docx)
 - [Arquitetura atual](docs/figuras/arquitetura-radar-atual.png)
 - [Modelo de dados](docs/figuras/modelo-dados-radar.png)
+- [Atualização de identidade e mudança de IP](docs/identidade-e-mudanca-de-ip.md)
+- [Paginação do histórico e redução de carregamento](docs/historico-paginado.md)
 
 O documento completo descreve arquitetura, fontes de coleta, dados de licença, API, configuração, instalação, atualização de agentes, backup, recuperação, segurança, diagnóstico e pendências. Inclui textos sugeridos para o TCC e referências técnicas primárias.
 
@@ -73,7 +75,7 @@ O banco `database/inventario.db` é persistido no host. Ele contém contas, inve
 
 A pasta `database/`, o `.env`, os certificados locais e outros dados de execução são ignorados pelo Git. Código do agente e scripts de instalação são arquivos versionados e devem ser revisados ao preparar cada commit.
 
-A revisão atual identificou que `backend/routes/export.py` referencia `Dispositivo` sem importá-lo. As exportações também precisam aplicar as correções manuais e incluir os campos recentes. Essas rotas não devem ser consideradas homologadas antes da correção e validação. A documentação registra outras limitações, como ausência de retenção, conciliação completa de IPs e uso do servidor embutido Flask.
+A importação de `Dispositivo` na exportação foi corrigida. As exportações ainda precisam aplicar as correções manuais e incluir os campos recentes. Essas rotas não devem ser consideradas homologadas antes da correção e validação. A documentação registra outras limitações, como retenção ainda não aplicada às coletas dos agentes e uso do servidor embutido Flask. As regras atuais de conciliação de IPs estão no adendo de 28/10.
 
 ## Registros históricos
 

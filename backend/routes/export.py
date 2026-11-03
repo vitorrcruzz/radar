@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from backend.inventory_query import consulta_dispositivos_com_coleta
+from backend.models import Dispositivo
 
 export_bp = Blueprint("export", __name__)
 
@@ -31,7 +32,7 @@ def _dispositivos_para_df():
         else:
             dias_str = str(dias)
         linhas.append({
-            "IP":               d.ip,
+            "IP":               d.ip or "Sem IP atual",
             "Hostname":         d.hostname       or "—",
             "Tipo":             d.tipo           or "Desconhecido",
             "Status":           d.status.upper(),

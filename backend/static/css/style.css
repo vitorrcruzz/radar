@@ -237,6 +237,23 @@ table.dataTable tbody tr:hover { background: var(--table-hover) !important; }
 table.dataTable thead th { color: var(--text-primary); border-color: var(--card-border) !important; }
 table.dataTable td, table.dataTable th { border-color: var(--card-border) !important; }
 
+/* A data usa o contraste do tema e mantém espaço mesmo na tabela larga. */
+#secao-dispositivos .ultima-varredura {
+  min-width: 10.5rem;
+  white-space: nowrap;
+}
+#secao-dispositivos .ultima-varredura span {
+  color: var(--text-primary);
+  font-size: .875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.grafico-container {
+  position: relative;
+  height: 300px;
+  width: 100%;
+}
+
 /* DataTables controles */
 [data-theme="nordic"] .dataTables_wrapper .dataTables_length,
 [data-theme="nordic"] .dataTables_wrapper .dataTables_filter,

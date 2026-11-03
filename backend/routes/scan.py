@@ -1,6 +1,7 @@
 import os
 import ipaddress
 import logging
+import sqlite3
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from flask import Blueprint, jsonify
@@ -9,6 +10,8 @@ from backend.database import db
 from backend.models import Agente, Dispositivo, HistoricoVarredura
 from backend.network_labels import identificar_rede
 from backend.inventory_query import consulta_dispositivos_com_coleta
+from backend.device_identity import buscar_por_identidade, definir_ip, liberar_ocupante_antigo, validar_identidade_no_ip
+from sqlalchemy.exc import IntegrityError
 
 scan_bp = Blueprint("scan", __name__)
 
@@ -35,6 +38,9 @@ def executar_varredura(app, disparado_por: str = "automatico"):
             for agente in Agente.query.filter_by(ativo=True).all()
         }
         for dispositivo in Dispositivo.query.all():
+            if not dispositivo.ip:
+                dispositivo.status = "offline"
+                continue
             etiqueta_rede = identificar_rede(dispositivo.ip)
             if etiqueta_rede:
                 dispositivo.rede = etiqueta_rede
@@ -132,10 +138,29 @@ def executar_varredura(app, disparado_por: str = "automatico"):
             ip    = res["ip"]
             dados = res.get("dados", {})
 
-            dispositivo = Dispositivo.query.filter_by(ip=ip).first()
-            if dispositivo is None:
-                dispositivo = Dispositivo(ip=ip)
-                db.session.add(dispositivo)
+            try:
+                with db.session.begin_nested():
+                    por_ip = Dispositivo.query.filter_by(ip=ip).first()
+                    dispositivo = buscar_por_identidade(dados) if dados.get("tipo") != "Host sem coleta" else None
+                    if dispositivo is not None:
+                        if por_ip is not None and por_ip.id != dispositivo.id:
+                            from backend.routes.agents import _host_apenas_descoberto
+                            if _host_apenas_descoberto(por_ip):
+                                db.session.delete(por_ip)
+                                db.session.flush()
+                            else:
+                                liberar_ocupante_antigo(por_ip, dispositivo, dados, "snmp", True)
+                        definir_ip(dispositivo, ip, "snmp")
+                    else:
+                        dispositivo = por_ip
+                        validar_identidade_no_ip(dispositivo, dados)
+                        if dispositivo is None:
+                            dispositivo = Dispositivo(ip=ip)
+                            db.session.add(dispositivo)
+                            db.session.flush()
+            except (ValueError, IntegrityError) as erro:
+                logging.warning("Coleta SNMP com identidade ambígua: ip=%s motivo=%s", ip, erro)
+                continue
             etiqueta_rede = identificar_rede(ip)
             if etiqueta_rede:
                 dispositivo.rede = etiqueta_rede
@@ -150,6 +175,9 @@ def executar_varredura(app, disparado_por: str = "automatico"):
                     continue
 
             if res["status"] == "online":
+                if dados.get("tipo") == "Host sem coleta" and dispositivo.tipo != "Host sem coleta" and dispositivo.tipo:
+                    # ICMP não comprova a identidade de quem recebeu um IP DHCP.
+                    continue
                 total_online += 1
                 dispositivo.hostname      = dados.get("hostname")
                 dispositivo.tipo          = dados.get("tipo")
@@ -158,8 +186,8 @@ def executar_varredura(app, disparado_por: str = "automatico"):
                 dispositivo.armazenamento = dados.get("armazenamento")
                 dispositivo.memoria       = dados.get("memoria")
                 dispositivo.processador    = dados.get("processador")
-                dispositivo.mac_address    = dados.get("mac_address")
-                dispositivo.serial_number  = dados.get("serial_number")
+                dispositivo.mac_address    = dados.get("mac_address") or dispositivo.mac_address
+                dispositivo.serial_number  = dados.get("serial_number") or dispositivo.serial_number
                 dispositivo.descricao     = dados.get("descricao")
                 dispositivo.localizacao   = dados.get("localizacao")
                 dispositivo.contato       = dados.get("contato")
@@ -192,6 +220,19 @@ def executar_varredura(app, disparado_por: str = "automatico"):
         historico.total_online    = total_online
         historico.total_offline   = total_offline
         db.session.commit()
+
+        # Executado após salvar a varredura, para manter pequena a tabela de
+        # resumos. Não toca em coletas dos agentes, ativos, usuários ou tokens.
+        database = db.engine.url.database
+        if database and database != ":memory:":
+            from backend.history_retention import limpar_historico
+            try:
+                limpeza = limpar_historico(database, os.getenv("HISTORICO_MAX_REGISTROS", "500"))
+                if limpeza["removidos"]:
+                    logging.info("Retenção do histórico: removidos=%s mantidos=%s",
+                                 limpeza["removidos"], limpeza["mantidos"])
+            except (ValueError, OSError, sqlite3.Error):
+                logging.exception("Não foi possível aplicar a retenção do histórico nesta varredura.")
 
         return {
             "escaneados": total_geral,

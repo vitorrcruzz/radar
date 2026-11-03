@@ -61,7 +61,7 @@ def _atualizar_status_agentes():
             (agora - agente.ultima_coleta).total_seconds()
             if agente.ultima_coleta else limite + 1
         )
-        expirado = not agente.ativo or idade > limite
+        expirado = not dispositivo.ip or not agente.ativo or idade > limite
         if expirado and dispositivo.status == "online":
             dispositivo.status = "offline"
             alterado = True
@@ -252,7 +252,45 @@ def estatisticas():
 
 @devices_bp.route("/historico")
 def historico():
-    registros = HistoricoVarredura.query.order_by(
-        HistoricoVarredura.id.desc()
-    ).all()  # Remove o .limit(20)
-    return jsonify([r.to_dict() for r in registros])
+    """Paginação no banco para o protocolo serverSide do DataTables."""
+    inicio = max(0, request.args.get("start", 0, type=int))
+    tamanho = request.args.get("length", 15, type=int)
+    tamanho = min(50, tamanho) if tamanho > 0 else 15
+    draw = max(0, request.args.get("draw", 0, type=int))
+    busca = request.args.get("search[value]", "").strip()[:120]
+    query = HistoricoVarredura.query
+    total = query.count()
+    if busca:
+        campos = (
+            db.cast(HistoricoVarredura.id, db.String),
+            db.func.strftime("%d/%m/%Y %H:%M:%S", HistoricoVarredura.iniciado_em),
+            db.func.strftime("%d/%m/%Y %H:%M:%S", HistoricoVarredura.finalizado_em),
+            db.cast(HistoricoVarredura.total_escaneado, db.String),
+            db.cast(HistoricoVarredura.total_online, db.String),
+            db.cast(HistoricoVarredura.total_offline, db.String),
+            HistoricoVarredura.disparado_por,
+        )
+        busca = busca.lower().replace("á", "a")
+        query = query.filter(db.or_(*(db.func.lower(campo).contains(busca, autoescape=True) for campo in campos)))
+    filtrados = query.count() if busca else total
+    colunas = (
+        HistoricoVarredura.id, HistoricoVarredura.iniciado_em,
+        HistoricoVarredura.finalizado_em, HistoricoVarredura.total_escaneado,
+        HistoricoVarredura.total_online, HistoricoVarredura.total_offline,
+        HistoricoVarredura.disparado_por,
+    )
+    indice = request.args.get("order[0][column]", 0, type=int)
+    coluna = colunas[indice] if 0 <= indice < len(colunas) else colunas[0]
+    ordem = coluna.asc() if request.args.get("order[0][dir]") == "asc" else coluna.desc()
+    registros = query.order_by(ordem, HistoricoVarredura.id.desc()).offset(inicio).limit(tamanho).all()
+    return jsonify({
+        "draw": draw, "recordsTotal": total, "recordsFiltered": filtrados,
+        "data": [registro.to_dict() for registro in registros],
+    })
+
+
+@devices_bp.route("/historico/recentes")
+def historico_recente():
+    """O gráfico precisa somente das dez varreduras mais recentes."""
+    registros = HistoricoVarredura.query.order_by(HistoricoVarredura.id.desc()).limit(10).all()
+    return jsonify([registro.to_dict() for registro in registros])
