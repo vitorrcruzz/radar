@@ -986,3 +986,79 @@ table.dataTable td, table.dataTable th { border-color: var(--card-border) !impor
 @media (prefers-reduced-motion: reduce) {
   .login-input-wrap .form-control, .login-submit, .login-submit i { transition: none; }
 }
+
+/* Navegação recolhível e inventário compacto no celular. */
+.menu-toggle { display: none; }
+.device-details-button {
+  background: none; border: 0; padding: 0; color: inherit;
+  font: inherit; font-weight: 700; text-align: left; overflow-wrap: anywhere;
+}
+.device-details-button:focus-visible { outline: 2px solid var(--azul-claro); outline-offset: 3px; }
+#secao-dispositivos .table-card > .p-3 { overflow-x: auto; }
+@media (max-width: 700px) {
+  #sidebar { max-height: 85dvh; overflow-y: auto; }
+  #sidebar .logo { grid-column: 1; grid-row: 1; padding: .8rem; }
+  .menu-toggle {
+    display: inline-flex; align-items: center; justify-content: center;
+    grid-column: 2; grid-row: 1; width: 44px; height: 44px; margin: .5rem .75rem;
+    background: transparent; color: white; border: 1px solid #ffffff50;
+    border-radius: .5rem; font-size: 1.5rem;
+  }
+  #sidebar > ul.nav { display: none !important; }
+  #sidebar > .px-3.mb-2 { display: none !important; }
+  #sidebar.menu-aberto > ul.nav {
+    display: flex !important; flex-direction: column !important;
+    overflow: visible; padding: .4rem .75rem !important;
+  }
+  #sidebar.menu-aberto > .px-3.mb-2 {
+    display: flex !important; grid-column: 1 / -1; grid-row: auto;
+    padding: .5rem .75rem .8rem !important;
+  }
+  #sidebar .nav-link { min-height: 44px; display: flex; align-items: center; font-size: .9rem; }
+  .grafico-container { height: 260px; }
+  .login-page { padding: .75rem; min-height: 100svh; }
+  .login-shell { min-height: 0; grid-template-rows: auto auto; }
+  .login-brand { min-height: 0; padding: 1.2rem; }
+  .login-form-panel { padding: 1.5rem 1.2rem; }
+  .login-form-wrap { margin: 0 auto; }
+  .login-heading { margin-bottom: 1.25rem; }
+  .login-input-wrap .form-control { font-size: 16px; }
+  .login-password-toggle { min-width: 44px; min-height: 44px; }
+  #secao-dispositivos .table-card > .p-3 { overflow-x: visible; }
+  #tabela-dispositivos { display: block; min-width: 0; width: 100% !important; }
+  #tabela-dispositivos thead { display: none; }
+  #tabela-dispositivos tbody { display: block; }
+  #tabela-dispositivos tbody tr {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    margin: 0 0 .75rem; padding: .85rem; gap: .5rem;
+    border: 1px solid var(--input-border); border-radius: .75rem;
+  }
+  #tabela-dispositivos tbody td {
+    display: none; border: 0; padding: 0 !important; min-width: 0;
+    box-shadow: none !important; overflow-wrap: anywhere;
+  }
+  #tabela-dispositivos tbody td:nth-child(3) { display: block; grid-column: 1; grid-row: 1; }
+  #tabela-dispositivos tbody td:nth-child(5) { display: block; grid-column: 2; grid-row: 1; }
+  #tabela-dispositivos tbody td:nth-child(1) { display: block; grid-column: 1; grid-row: 2; }
+  #tabela-dispositivos tbody td:nth-child(2) { display: block; grid-column: 2; grid-row: 2; }
+  #tabela-dispositivos tbody td:nth-child(4) { display: block; grid-column: 1 / -1; grid-row: 3; }
+  #tabela-dispositivos tbody td.dataTables_empty { display: block; grid-column: 1 / -1; }
+  .device-details-button { min-height: 32px; text-decoration: underline; text-underline-offset: 3px; }
+  .dataTables_wrapper .row > * { min-width: 0; }
+  .dataTables_wrapper .dataTables_filter input { width: 100%; max-width: 100%; margin: .4rem 0 0; }
+  .dataTables_wrapper .dataTables_filter label { display: block; }
+  .dataTables_wrapper .dataTables_length select { min-width: 72px; min-height: 40px; }
+  .dataTables_wrapper .dataTables_paginate .pagination { flex-wrap: wrap; gap: .25rem; }
+}
+
+/* Ações do cabeçalho e centralização do acesso no celular. */
+.mobile-logout { display: none; }
+@media (max-width: 700px) {
+  .login-page { display: flex; flex-direction: column; min-height: 100svh; }
+  .login-shell { flex-shrink: 0; margin: auto; }
+  #sidebar { grid-template-columns: minmax(0, 1fr) auto auto; }
+  #sidebar .mobile-logout { display: block; grid-column: 2; grid-row: 1; margin: 0; }
+  .mobile-logout button { min-height: 44px; padding: .5rem .7rem; }
+  #sidebar .menu-toggle { grid-column: 3; margin-left: .5rem; }
+  .topbar .desktop-logout { display: none; }
+}

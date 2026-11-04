@@ -55,9 +55,19 @@ PRIV_PROTOCOLS = {
 }
 
 
+def modelo_unifi_descricao(descricao: str | None) -> str | None:
+    """Reconhece o modelo observado no sysDescr dos APs U6-Pro do piloto."""
+    if re.match(r"^U6-Pro(?:\s|$)", (descricao or "").strip(), re.IGNORECASE):
+        return "Ubiquiti UniFi U6-Pro"
+    return None
+
+
 def detectar_tipo(dados: dict[str, Any]) -> str:
     descricao = (dados.get("descricao") or "").lower()
     hostname = (dados.get("hostname") or "").lower()
+
+    if modelo_unifi_descricao(dados.get("descricao")):
+        return "Access Point"
 
     if "cisco" in descricao or "catalyst" in descricao or "sw-" in hostname:
         return "Switch"
@@ -539,6 +549,8 @@ async def _consultar_dispositivo(
                 destino,
             )
         )
+        if not dados.get("modelo"):
+            dados["modelo"] = modelo_unifi_descricao(dados.get("descricao"))
         dados["mac_address"] = await _coletar_mac_address(
             engine,
             autenticacao,

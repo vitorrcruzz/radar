@@ -170,7 +170,30 @@ function atualizarGraficosClaro() {
   }
 }
 // ── Navegação ──────────────────────────────────────────
+function fecharMenuMobile() {
+  document.getElementById('sidebar')?.classList.remove('menu-aberto');
+  const botao = document.getElementById('menu-toggle');
+  botao?.setAttribute('aria-expanded', 'false');
+  botao?.setAttribute('aria-label', 'Abrir menu');
+}
+
+function configurarMenuMobile() {
+  const menuToggle = document.getElementById('menu-toggle');
+  menuToggle?.addEventListener('click', () => {
+    const aberto = document.getElementById('sidebar').classList.toggle('menu-aberto');
+    menuToggle.setAttribute('aria-expanded', String(aberto));
+    menuToggle.setAttribute('aria-label', aberto ? 'Fechar menu' : 'Abrir menu');
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && menuToggle?.getAttribute('aria-expanded') === 'true') {
+      fecharMenuMobile();
+      menuToggle.focus();
+    }
+  });
+}
+
 function mostrarSecao(nome) {
+  fecharMenuMobile();
   ['dashboard','dispositivos','historico'].forEach(s => {
     document.getElementById('secao-'+s).style.display = 'none';
   });
@@ -231,7 +254,7 @@ async function carregarStats() {
       datasets: [{ data: values, backgroundColor: cores, borderWidth: 2 }]
     },
     options: {
-      plugins: { legend: { position: 'right', labels: { font: { size: 12 } } } },
+      plugins: { legend: { position: window.innerWidth <= 700 ? 'bottom' : 'right', labels: { font: { size: 12 } } } },
       responsive: true,
       maintainAspectRatio: false,
       cutout: '60%',
@@ -367,14 +390,15 @@ async function abrirModal(d) {
       <div class="col-md-6">
         <div class="info-card" style="${ti}">
           <div class="info-label"><i class="bi bi-key me-1"></i>Licença</div>
-          <p class="small text-muted mb-2">Ativação e edição reportadas pelo Windows. Isso não comprova a titularidade comercial da licença.</p>
+          ${d.licenca_windows_aplicavel === false ? '<p class="small text-muted mb-2">Licenciamento do Windows não se aplica a este equipamento de rede. Licenças próprias podem ser cadastradas manualmente.</p>' : '<p class="small text-muted mb-2">Ativação e edição reportadas pelo Windows. Isso não comprova a titularidade comercial da licença.</p>'}
           <table class="table table-sm table-borderless mb-0">
+            ${d.licenca_windows_aplicavel === false ? '' : `
             <tr><td style="width:45%;${tm}">Edição do Windows</td>
                 <td style="${tc}"><strong>${escaparHtml(d.edicao_windows)}</strong></td></tr>
             <tr><td style="${tm}">Ativação do Windows</td>
                 <td style="${tc}"><strong>${escaparHtml(d.status_ativacao_windows)}</strong></td></tr>
             <tr><td style="${tm}">Expiração informada pelo Windows</td>
-                <td style="${tc}"><strong>${escaparHtml(d.licenca_windows_expira)}</strong></td></tr>
+                <td style="${tc}"><strong>${escaparHtml(d.licenca_windows_expira)}</strong></td></tr>`}
             <tr><td style="${tm}">Licença cadastrada</td>
                 <td style="${tc}"><strong>${escaparHtml(d.licenca_software)}</strong></td></tr>
             <tr><td style="${tm}">Validade cadastrada</td>
@@ -577,7 +601,11 @@ async function excluirSoftware(softwareId) {
 
 // ── Tabela de dispositivos ─────────────────────────────
 function badgeLicenca(d) {
-  const ativacaoWindows = d.status_ativacao_windows;
+  const semWindows = d.licenca_windows_aplicavel === false;
+  const nomeLicenca = String(d.licenca_software || '').trim().normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const temLicencaCadastrada = !['', '—', '-', 'nao se aplica', 'n/a'].includes(nomeLicenca);
+  const ativacaoWindows = semWindows ? null : d.status_ativacao_windows;
   if (ativacaoWindows && ativacaoWindows !== 'Não coletado') {
     if (ativacaoWindows === 'Ativo') {
       return '<span class="badge bg-success">Ativa no Windows</span>';
@@ -587,7 +615,11 @@ function badgeLicenca(d) {
     return `<span class="badge ${cor}">${escaparHtml(ativacaoWindows)}</span>`;
   }
   if (d.licenca_expira === '—' || d.licenca_expira === null) {
-    return '<span class="badge bg-secondary">Sem licença</span>';
+    return semWindows
+      ? (temLicencaCadastrada
+          ? '<span class="badge bg-secondary">Licença cadastrada</span>'
+          : '<span class="badge bg-secondary">Não se aplica</span>')
+      : '<span class="badge bg-secondary">Sem licença</span>';
   }
   const sl = d.status_licenca;
   if (sl === 'expirada') {
@@ -630,7 +662,7 @@ async function carregarDispositivos() {
       <tr style="cursor:pointer" onclick="abrirModal(window._dispositivos[${idx}])">
         <td><code>${escaparHtml(d.ip)}</code></td>
         <td><span class="badge bg-info text-dark">${escaparHtml(d.rede)}</span></td>
-        <td><strong>${escaparHtml(d.hostname)}</strong></td>
+        <td><button type="button" class="device-details-button" aria-label="Ver detalhes de ${escaparHtml(d.hostname)}">${escaparHtml(d.hostname)}</button></td>
         <td><span class="badge bg-light text-dark border">${escaparHtml(d.tipo)}</span></td>
         <td>${badge}</td>
         <td><small>${escaparHtml(d.modelo)}</small></td>
@@ -657,8 +689,9 @@ async function carregarDispositivos() {
   tabelaDispositivos = new DataTable('#tabela-dispositivos', {
     language: { url: 'https://cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json' },
     pageLength: 15,
+    lengthMenu: [10, 15, 25, 50],
     order: [[4, 'desc']],
-    scrollX: true,
+    scrollX: false,
     initComplete: function() {
       corrigirEstilosDataTables();
       setTimeout(aplicarTemaSelect, 50);
@@ -739,6 +772,7 @@ async function dispararVarredura() {
 
 // ── Init ───────────────────────────────────────────────
 (async () => {
+  configurarMenuMobile();
   // Aplica tema salvo
   const temaSalvo = localStorage.getItem('tema') || 'light';
   aplicarTema(temaSalvo);

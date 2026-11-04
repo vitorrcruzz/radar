@@ -127,7 +127,8 @@ class Dispositivo(db.Model):
             else:
                 dados[campo_manual.campo] = valor_manual
             dados["fontes_manuais"].append(campo_manual.campo)
-        if dados["tipo"] in {"Roteador", "Switch", "Access Point", "Camera IP", "Nobreak", "Impressora"}:
+        dados["licenca_windows_aplicavel"] = dados["tipo"] not in {"Roteador", "Switch", "Access Point", "Camera IP", "Nobreak", "Impressora"}
+        if not dados["licenca_windows_aplicavel"]:
             dados["edicao_windows"] = "Não se aplica"
             dados["status_ativacao_windows"] = "Não se aplica"
             dados["licenca_windows_expira"] = "Não se aplica"

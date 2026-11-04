@@ -4,6 +4,7 @@ const vm = require('node:vm');
 const source = fs.readFileSync('backend/static/js/main.js', 'utf8').split('// ── Init ')[0];
 let created = 0, updated = 0, revision = 0;
 const context = {
+  window: {innerWidth: 1280},
   document: { getElementById: id => ({id, textContent: ''}) },
   Chart: class {
     constructor(canvas, config) { created++; this.data = config.data; this.options = config.options; }
